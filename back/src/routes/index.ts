@@ -1,0 +1,146 @@
+import { Router, Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+
+// استيراد النماذج (Models)
+import { User } from '../models/user';
+import Chat from '../models/chat';
+import Message from '../models/Message';
+import Post from '../models/Post';
+import Job from '../models/Job';
+
+// استيراد أدوات الحماية ومعالجة الأخطاء
+import { protect } from '../middlewares/auth.middleware';
+import { catchAsync } from '../utils/catchAsync';
+import { AppError } from '../utils/AppError';
+
+import { getMyProfile, updateMyProfile, getUserProfile, deleteMyAccount, searchUsers } from '../controllers/profile.controller';
+
+import { uploadAvatar } from '../middlewares/upload.middleware';
+import { uploadProfileAvatar } from '../controllers/profile.controller';
+import { restrictTo } from '../middlewares/authorize.middleware';
+
+import callRoutes from './callRoutes';
+import chatRoutes from './chatRoutes';
+import employerRoutes from './employer.routes';
+import communityRoutes from './communityRoutes';
+import postRoutes from './postRoutes';
+import jobRoutes from './jobRoutes';
+import notificationRoutes from './notificationRoutes';
+
+// إنشاء الـ Router
+const router = Router();
+router.use('/calls', callRoutes);
+router.use('/chats', chatRoutes);
+router.use('/employer', employerRoutes);
+router.use('/groups', communityRoutes);
+router.use('/posts', postRoutes);
+router.use('/jobs', jobRoutes);
+router.use('/notifications', notificationRoutes);
+
+// ==========================================
+// 🚀 المسارات (Routes)
+// ملاحظة: مسحنا كلمة BASE_URL من هنا لأننا هنربطها في السيرفر الرئيسي
+// ==========================================
+
+router.get('/test', (req: Request, res: Response) => {
+  res.send('Server is running');
+});
+
+// مسار جلب كل المستخدمين
+router.get('/users', catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const users = await User.find();
+  res.status(200).json(users);
+}));
+
+// مسار التسجيل (Register)
+router.post('/auth/register', catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { fullName, email, password, phoneNumber, role, trackName } = req.body;
+
+  if (!phoneNumber) {
+    return next(new AppError('Phone number is required!', 400));
+  }
+
+  const existingUser = await User.findOne({
+    $or: [{ email: email }, { phoneNumber: phoneNumber }]
+  });
+
+  if (existingUser) {
+    return next(new AppError('The email or phone number is already registered!', 400));
+  }
+
+  const newUser = new User({
+    fullName, email, password, phoneNumber, role, trackName
+  });
+
+  const savedUser = await newUser.save();
+
+  const token = jwt.sign(
+    { id: savedUser._id, role: savedUser.role },
+    process.env.JWT_SECRET as string,
+    { expiresIn: '7d' }
+  );
+
+  res.status(201).json({
+    status: 'success',
+    message: "The account has been successfully created",
+    token: token,
+    user: {
+      id: savedUser._id,
+      fullName: savedUser.fullName,
+      email: savedUser.email,
+      phoneNumber: savedUser.phoneNumber,
+      role: savedUser.role
+    }
+  });
+}));
+
+
+// مسار ربط حساب جوجل (مسار محمي)
+router.post('/users/link-google', protect, catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { googleId } = req.body;
+
+  if (!googleId) {
+    return next(new AppError('Google ID is required', 400));
+  }
+
+  const existingGoogleUser = await User.findOne({ googleId });
+  if (existingGoogleUser) {
+    return next(new AppError('This Google account is already linked to another user.', 400));
+  }
+
+  // 👇 التعديل السحري هنا: ضفنا as any 👇
+  const user = req.user as any;
+
+  user.googleId = googleId;
+  await user.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: "Google account has been successfully linked",
+    user: {
+      id: user._id,
+      fullName: user.fullName,
+      googleId: user.googleId
+    }
+  });
+}));
+
+// ✅ مسارات الشات والرسائل اتنقلت لـ chatRoutes.ts عشان تكون منظمة ومحمية
+// راجع: routes/chatRoutes.ts + controllers/chat.controller.ts + services/chat.service.ts
+
+// مسار البحث (بنحميه بـ protect عشان بس المسجلين في رابطة هما اللي يبحثوا)
+router.get('/users/search/all', protect, searchUsers);
+// مسار عشان اليوزر يشوف بروفايل أي حد تاني (مش محتاج حماية أو ممكن تحميه حسب رغبتكم)
+router.get('/users/:id', protect, getUserProfile);
+
+// المسارات الشخصية (لازم يكون عامل لوجين - نستخدم الميدل وير protect)
+router.get('/profile/me', protect, getMyProfile);
+router.patch('/profile/me', protect, updateMyProfile); // بنستخدم Patch لأننا بنحدث أجزاء معينة مش اليوزر كله
+router.delete('/profile/me', protect, deleteMyAccount);
+
+// مسار رفع الصورة (الحارس -> مستلم الصور -> الكنترولر)
+router.patch('/profile/me/avatar', protect, uploadAvatar.single('avatar'), uploadProfileAvatar);
+export default router;
+
+
+
