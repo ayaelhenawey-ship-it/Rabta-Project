@@ -25,9 +25,22 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // إنشاء الاتصال
-    const socketInstance = io("http://localhost:5000", {
+    // إنشاء الاتصال مع تمرير التوكن للمصادقة
+    const token = localStorage.getItem("token");
+    
+    // Extract the base domain from the API URL (e.g. "http://localhost:5000/api/v1" -> "http://localhost:5000")
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+    const socketUrl = apiUrl.split('/api')[0];
+
+    const socketInstance = io(socketUrl, {
       autoConnect: true,
+      auth: {
+        token: token // This is required by the backend io.use() middleware
+      }
+    });
+
+    socketInstance.on("connect_error", (err) => {
+      console.error("🔴 Socket Connection Error:", err.message);
     });
 
     // 💡 الحل هنا: نقلنا التخزين جوه الـ Callback عشان نمنع الـ Cascading Renders

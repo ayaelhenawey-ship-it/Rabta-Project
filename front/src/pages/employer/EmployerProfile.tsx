@@ -2,18 +2,10 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import type { RootState } from '../../store/store';
-import { useDispatch } from 'react-redux';
-import { logout } from '../../store/slices/authSlice';
 
 const EmployerProfile: React.FC = () => {
   const user = useSelector((state: RootState) => state.auth.user);
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login');
-  };
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] dark:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] p-4 md:p-10">
@@ -41,18 +33,18 @@ const EmployerProfile: React.FC = () => {
               </div>
               <div className="flex gap-3">
                 <button 
-                  onClick={() => navigate('/edit-profile')}
+                  onClick={() => navigate('/employer-dashboard')}
                   className="px-6 py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg shadow-[#7C3AED]/20"
+                >
+                  <span className="material-icons-round text-sm">dashboard</span>
+                  Go to Dashboard
+                </button>
+                <button 
+                  onClick={() => navigate('/edit-profile')}
+                  className="px-6 py-3 bg-white dark:bg-[#171717] border-2 border-gray-100 dark:border-white/5 hover:border-[#7C3AED] dark:hover:border-[#7C3AED] rounded-2xl font-bold transition-all flex items-center gap-2"
                 >
                   <span className="material-icons-round text-sm">edit</span>
                   Edit Company
-                </button>
-                <button 
-                  onClick={handleLogout}
-                  className="px-4 py-3 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-2xl font-bold transition-all flex items-center gap-2"
-                  title="Logout"
-                >
-                  <span className="material-icons-round text-sm">logout</span>
                 </button>
               </div>
             </div>

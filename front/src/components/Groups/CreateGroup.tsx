@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
@@ -55,13 +55,29 @@ const CreateGroup: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [invitedUsers, setInvitedUsers] = useState<string[]>([]);
 
-  const mockConnections = [
-    { id: '1', name: 'Ahmed Ali', role: 'Front-End Developer', initial: 'A', color: 'bg-blue-100 text-blue-600' },
-    { id: '2', name: 'Mona Hassan', role: 'UI/UX Designer', initial: 'M', color: 'bg-green-100 text-green-600' },
-    { id: '3', name: 'Youssef Alaa', role: 'Back-End Developer', initial: 'Y', color: 'bg-purple-100 text-purple-600' },
-  ];
+  const [connections, setConnections] = useState<any[]>([]);
 
-  const filteredConnections = mockConnections.filter(user => 
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await axiosInstance.get('/users/search/all?limit=50');
+        const usersList = response.data.data.users.map((u: any) => ({
+          id: u._id,
+          name: u.fullName,
+          role: u.jobTitle || u.role,
+          avatar: u.avatar,
+          initial: u.fullName ? u.fullName.charAt(0).toUpperCase() : '?',
+          color: 'bg-purple-100 text-purple-600'
+        }));
+        setConnections(usersList);
+      } catch (err) {
+        console.error("Failed to load connections", err);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  const filteredConnections = connections.filter(user => 
     user.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -306,7 +322,11 @@ const CreateGroup: React.FC = () => {
                   {filteredConnections.map(user => (
                     <label key={user.id} className="flex items-center justify-between p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg cursor-pointer transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full ${user.color} flex items-center justify-center font-bold text-sm`}>{user.initial}</div>
+                        {user.avatar ? (
+                          <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full object-cover" />
+                        ) : (
+                          <div className={`w-8 h-8 rounded-full ${user.color} flex items-center justify-center font-bold text-sm`}>{user.initial}</div>
+                        )}
                         <div>
                           <p className="text-sm font-semibold">{user.name}</p>
                           <p className="text-xs text-gray-500">{user.role}</p>

@@ -29,4 +29,226 @@ interface Job {
   postedAt: string;
 }
 
-const JobCard: React.FC<{ job: Job }> = ({ job }) => {\n  return (\n    <div className=\"bg-white dark:bg-[#262626] rounded-lg p-5 mb-4 shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-md transition-shadow duration-200 cursor-pointer group\">\n      {/* Job Header */}\n      <div className=\"flex justify-between items-start gap-4 mb-3\">\n        <div className=\"flex-1\">\n          <h3 className=\"text-lg font-bold text-[#171717] dark:text-[#F5F5F5] group-hover:text-[#7C3AED] dark:group-hover:text-[#8B5CF6] transition-colors\">\n            {job.title}\n          </h3>\n          <p className=\"text-sm text-gray-600 dark:text-gray-400 mt-1\">\n            {job.company}\n          </p>\n        </div>\n        <span className=\"px-3 py-1 bg-[#7C3AED]/10 dark:bg-[#8B5CF6]/10 text-[#7C3AED] dark:text-[#8B5CF6] text-xs font-semibold rounded-full\">\n          {job.level}\n        </span>\n      </div>\n\n      {/* Job Details */}\n      <p className=\"text-[#171717] dark:text-[#F5F5F5] text-sm mb-3 line-clamp-2\">\n        {job.description}\n      </p>\n\n      {/* Job Meta */}\n      <div className=\"flex flex-wrap gap-4 mb-4 text-sm text-gray-600 dark:text-gray-400\">\n        <div className=\"flex items-center gap-1\">\n          <span className=\"text-base\">📍</span>\n          <span>{job.location}</span>\n        </div>\n        <div className=\"flex items-center gap-1\">\n          <span className=\"text-base\">💰</span>\n          <span>\n            {job.salary.currency}\n            {job.salary.min}k - {job.salary.max}k\n          </span>\n        </div>\n        <div className=\"flex items-center gap-1\">\n          <span className=\"text-base\">🏷️</span>\n          <span>{job.category}</span>\n        </div>\n      </div>\n\n      {/* Job Footer */}\n      <div className=\"flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-800\">\n        <span className=\"text-xs text-gray-500 dark:text-gray-400\">\n          {job.applicants} متقدم\n        </span>\n        <button className=\"px-4 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] dark:bg-[#8B5CF6] dark:hover:bg-[#7C3AED] text-white rounded-lg font-medium transition-colors text-sm\">\n          تقديم\n        </button>\n      </div>\n    </div>\n  );\n};\n\n/**\n * ============================================================================\n * JobList Component - الـ MAIN COMPONENT\n * ============================================================================\n * \n * استخدم هذا الـ component مثال لكيفية:\n * 1. Dispatch fetchJobs في useEffect عند تحميل الـ component\n * 2. استخدام setFilters لـ filter الوظائف\n * 3. عرض filtered jobs based على الـ filters من Redux\n */\nexport const JobList: React.FC = () => {\n  const dispatch = useAppDispatch();\n  const [searchTerm, setSearchTerm] = useState('');\n\n  // ✅ Get data من Redux store\n  const jobs = useAppSelector((state) => state.jobs.jobs);\n  const filters = useAppSelector((state) => state.jobs.filters);\n  const loading = useAppSelector((state) => state.jobs.loading);\n  const error = useAppSelector((state) => state.jobs.error);\n\n  /**\n   * ✅ Dispatch fetchJobs عند تحميل الـ component\n   */\n  useEffect(() => {\n    dispatch(fetchJobs());\n  }, [dispatch]);\n\n  /**\n   * Filter jobs based على الـ active filters و search term\n   */\n  const filteredJobs = jobs.filter((job: Job) => {\n    const matchesSearch = job.title\n      .toLowerCase()\n      .includes(searchTerm.toLowerCase()) ||\n      job.company.toLowerCase().includes(searchTerm.toLowerCase());\n    \n    const matchesCategory = !filters.category || job.category === filters.category;\n    const matchesLocation = !filters.location || job.location === filters.location;\n    const matchesSalary = !filters.salary || \n      (job.salary.max >= filters.salary.min && job.salary.min <= filters.salary.max);\n    \n    return matchesSearch && matchesCategory && matchesLocation && matchesSalary;\n  });\n\n  // ============================================================================\n  // LOADING STATE\n  // ============================================================================\n  if (loading && jobs.length === 0) {\n    return (\n      <div className=\"flex items-center justify-center min-h-screen\">\n        <div className=\"text-center\">\n          <div className=\"flex justify-center mb-4\">\n            <div className=\"animate-spin rounded-full h-12 w-12 border-b-2 border-[#7C3AED]\"></div>\n          </div>\n          <p className=\"text-gray-600 dark:text-gray-400 font-medium\">\n            جاري تحميل الوظائف...\n          </p>\n        </div>\n      </div>\n    );\n  }\n\n  // ============================================================================\n  // ERROR STATE\n  // ============================================================================\n  if (error) {\n    return (\n      <div className=\"flex items-center justify-center min-h-screen\">\n        <div className=\"bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md text-center\">\n          <div className=\"text-3xl mb-2\">⚠️</div>\n          <h3 className=\"text-lg font-bold text-red-600 mb-2\">حدث خطأ</h3>\n          <p className=\"text-red-600 text-sm mb-4\">{error}</p>\n          <button\n            onClick={() => dispatch(fetchJobs())}\n            className=\"bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors\"\n          >\n            جرب مرة أخرى\n          </button>\n        </div>\n      </div>\n    );\n  }\n\n  // ============================================================================\n  // SUCCESS STATE - عرض الوظائف\n  // ============================================================================\n  return (\n    <div className=\"min-h-screen bg-[#FAFAFA] dark:bg-[#171717] py-6\">\n      <div className=\"max-w-4xl mx-auto px-4\">\n        {/* Header */}\n        <div className=\"mb-8\">\n          <h1 className=\"text-3xl font-bold text-[#171717] dark:text-[#F5F5F5] mb-2\">\n            الوظائف المتاحة 💼\n          </h1>\n          <p className=\"text-gray-600 dark:text-gray-400\">\n            {filteredJobs.length} وظيفة متاحة\n          </p>\n        </div>\n\n        {/* Search Bar */}\n        <div className=\"mb-8\">\n          <input\n            type=\"text\"\n            placeholder=\"ابحث عن وظيفة أو شركة...\"\n            value={searchTerm}\n            onChange={(e) => setSearchTerm(e.target.value)}\n            className=\"w-full px-4 py-3 bg-white dark:bg-[#262626] border border-gray-200 dark:border-gray-800 rounded-lg text-[#171717] dark:text-[#F5F5F5] placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/50 transition-all\"\n          />\n        </div>\n\n        {/* Filters */}\n        <div className=\"mb-8 flex gap-3 flex-wrap\">\n          <button\n            onClick={() => dispatch(resetFilters())}\n            className=\"px-4 py-2 bg-gray-200 dark:bg-gray-800 text-[#171717] dark:text-[#F5F5F5] rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors\"\n          >\n            إعادة تعيين الفلاتر\n          </button>\n          {/* يمكنك إضافة filter buttons هنا */}\n        </div>\n\n        {/* Empty Filtered Results */}\n        {filteredJobs.length === 0 && jobs.length > 0 && (\n          <div className=\"text-center text-gray-500 dark:text-gray-400 py-12\">\n            <div className=\"text-4xl mb-2\">🔍</div>\n            <p className=\"text-lg\">لا توجد وظائف تطابق بحثك</p>\n            <p className=\"text-sm mt-2\">حاول تغيير المعايير</p>\n          </div>\n        )}\n\n        {/* ✅ KEY PART: تعيين الوظائف من Redux Store */}\n        {/* استخدم .map() لـ render كل وظيفة */}\n        {filteredJobs.length > 0 && (\n          <div className=\"space-y-4\">\n            {filteredJobs.map((job: Job) => (\n              <JobCard key={job.id} job={job} />\n            ))}\n          </div>\n        )}\n\n        {/* Load More */}\n        {loading && jobs.length > 0 && (\n          <div className=\"flex justify-center mt-8\">\n            <div className=\"text-sm text-gray-500 dark:text-gray-400\">\n              جاري تحميل المزيد...\n            </div>\n          </div>\n        )}\n      </div>\n    </div>\n  );\n};\n\nexport default JobList;\n\n/**\n * ============================================================================\n * استخدام هذا الـ Component\n * ============================================================================\n * \n * في ملف routing أو App.tsx:\n * \n * import JobList from './components/JobList';\n * \n * <Route path=\"/jobs\" element={<JobList />} />\n * \n * ============================================================================\n */\n
+const JobCard: React.FC<{ job: Job }> = ({ job }) => {
+  return (
+    <div className="bg-white dark:bg-[#262626] rounded-lg p-5 mb-4 shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-md transition-shadow duration-200 cursor-pointer group">
+      {/* Job Header */}
+      <div className="flex justify-between items-start gap-4 mb-3">
+        <div className="flex-1">
+          <h3 className="text-lg font-bold text-[#171717] dark:text-[#F5F5F5] group-hover:text-[#7C3AED] dark:group-hover:text-[#8B5CF6] transition-colors">
+            {job.title}
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {job.company}
+          </p>
+        </div>
+        <span className="px-3 py-1 bg-[#7C3AED]/10 dark:bg-[#8B5CF6]/10 text-[#7C3AED] dark:text-[#8B5CF6] text-xs font-semibold rounded-full">
+          {job.level}
+        </span>
+      </div>
+
+      {/* Job Details */}
+      <p className="text-[#171717] dark:text-[#F5F5F5] text-sm mb-3 line-clamp-2">
+        {job.description}
+      </p>
+
+      {/* Job Meta */}
+      <div className="flex flex-wrap gap-4 mb-4 text-sm text-gray-600 dark:text-gray-400">
+        <div className="flex items-center gap-1">
+          <span className="text-base">📍</span>
+          <span>{job.location}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-base">💰</span>
+          <span>
+            {job.salary.currency}
+            {job.salary.min}k - {job.salary.max}k
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-base">🏷️</span>
+          <span>{job.category}</span>
+        </div>
+      </div>
+
+      {/* Job Footer */}
+      <div className="flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-800">
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          {job.applicants} متقدم
+        </span>
+        <button className="px-4 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] dark:bg-[#8B5CF6] dark:hover:bg-[#7C3AED] text-white rounded-lg font-medium transition-colors text-sm">
+          تقديم
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * ============================================================================
+ * JobList Component - الـ MAIN COMPONENT
+ * ============================================================================
+ * 
+ * استخدم هذا الـ component مثال لكيفية:
+ * 1. Dispatch fetchJobs في useEffect عند تحميل الـ component
+ * 2. استخدام setFilters لـ filter الوظائف
+ * 3. عرض filtered jobs based على الـ filters من Redux
+ */
+export const JobList: React.FC = () => {
+  const dispatch = useAppDispatch();
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // ✅ Get data من Redux store
+  const jobs = useAppSelector((state) => state.jobs.jobs);
+  const filters = useAppSelector((state) => state.jobs.filters);
+  const loading = useAppSelector((state) => state.jobs.loading);
+  const error = useAppSelector((state) => state.jobs.error);
+
+  /**
+   * ✅ Dispatch fetchJobs عند تحميل الـ component
+   */
+  useEffect(() => {
+    dispatch(fetchJobs());
+  }, [dispatch]);
+
+  /**
+   * Filter jobs based على الـ active filters و search term
+   */
+  const filteredJobs = jobs.filter((job: Job) => {
+    const matchesSearch = job.title
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase()) ||
+      job.company.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCategory = !filters.category || job.category === filters.category;
+    const matchesLocation = !filters.location || job.location === filters.location;
+    const matchesSalary = !filters.salary || 
+      (job.salary.max >= filters.salary.min && job.salary.min <= filters.salary.max);
+    
+    return matchesSearch && matchesCategory && matchesLocation && matchesSalary;
+  });
+
+  // ============================================================================
+  // LOADING STATE
+  // ============================================================================
+  if (loading && jobs.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="flex justify-center mb-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7C3AED]"></div>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 font-medium">
+            جاري تحميل الوظائف...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // ERROR STATE
+  // ============================================================================
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md text-center">
+          <div className="text-3xl mb-2">⚠️</div>
+          <h3 className="text-lg font-bold text-red-600 mb-2">حدث خطأ</h3>
+          <p className="text-red-600 text-sm mb-4">{error}</p>
+          <button
+            onClick={() => dispatch(fetchJobs())}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            جرب مرة أخرى
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // SUCCESS STATE - عرض الوظائف
+  // ============================================================================
+  return (
+    <div className="min-h-screen bg-[#FAFAFA] dark:bg-[#171717] py-6">
+      <div className="max-w-4xl mx-auto px-4">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-[#171717] dark:text-[#F5F5F5] mb-2">
+            الوظائف المتاحة 💼
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            {filteredJobs.length} وظيفة متاحة
+          </p>
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-8">
+          <input
+            type="text"
+            placeholder="ابحث عن وظيفة أو شركة..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-3 bg-white dark:bg-[#262626] border border-gray-200 dark:border-gray-800 rounded-lg text-[#171717] dark:text-[#F5F5F5] placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/50 transition-all"
+          />
+        </div>
+
+        {/* Filters */}
+        <div className="mb-8 flex gap-3 flex-wrap">
+          <button
+            onClick={() => dispatch(resetFilters())}
+            className="px-4 py-2 bg-gray-200 dark:bg-gray-800 text-[#171717] dark:text-[#F5F5F5] rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
+          >
+            إعادة تعيين الفلاتر
+          </button>
+          {/* يمكنك إضافة filter buttons هنا */}
+        </div>
+
+        {/* Empty Filtered Results */}
+        {filteredJobs.length === 0 && jobs.length > 0 && (
+          <div className="text-center text-gray-500 dark:text-gray-400 py-12">
+            <div className="text-4xl mb-2">🔍</div>
+            <p className="text-lg">لا توجد وظائف تطابق بحثك</p>
+            <p className="text-sm mt-2">حاول تغيير المعايير</p>
+          </div>
+        )}
+
+        {/* ✅ KEY PART: تعيين الوظائف من Redux Store */}
+        {/* استخدم .map() لـ render كل وظيفة */}
+        {filteredJobs.length > 0 && (
+          <div className="space-y-4">
+            {filteredJobs.map((job: Job) => (
+              <JobCard key={job.id} job={job} />
+            ))}
+          </div>
+        )}
+
+        {/* Load More */}
+        {loading && jobs.length > 0 && (
+          <div className="flex justify-center mt-8">
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              جاري تحميل المزيد...
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default JobList;
+
+/**
+ * ============================================================================
+ * استخدام هذا الـ Component
+ * ============================================================================
+ * 
+ * في ملف routing أو App.tsx:
+ * 
+ * import JobList from './components/JobList';
+ * 
+ * <Route path="/jobs" element={<JobList />} />
+ * 
+ * ============================================================================
+ */

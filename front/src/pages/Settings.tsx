@@ -1,12 +1,21 @@
 import { useState } from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../store/store";
+import { logout } from "../store/slices/authSlice";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 
 export const Settings = () => {
   const user = useSelector((state: RootState) => state.auth.user);
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+
+  const getInitials = (name?: string) => {
+    if (!name) return "??";
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return parts[0].slice(0, 2).toUpperCase();
+  };
   
   const [settings, setSettings] = useState(user?.settings || {
     notifications: {
@@ -41,6 +50,12 @@ export const Settings = () => {
     toast.success("Preference updated");
   };
 
+  const handleLogout = () => {
+    dispatch(logout());
+    toast.success("Logged out successfully");
+    navigate("/login", { replace: true });
+  };
+
   return (
     <div className="flex-1 flex flex-col relative bg-[#FAFAFA] dark:bg-[#171717] overflow-y-auto transition-colors duration-300">
       <div className="max-w-2xl mx-auto w-full p-4 md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -50,11 +65,17 @@ export const Settings = () => {
         {/* Profile Card */}
         <div className="flex items-center gap-4 p-4 mb-6 bg-white dark:bg-[#262626] rounded-2xl border border-gray-100 dark:border-white/5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-all group">
           <div className="relative">
-            <img 
-              src={user?.avatar || "https://i.pravatar.cc/150?u=david"} 
-              className="w-16 h-16 rounded-full border-2 border-[#7C3AED] dark:border-[#8B5CF6] p-0.5 object-cover" 
-              alt="Profile"
-            />
+            {user?.avatar ? (
+              <img 
+                src={user.avatar} 
+                className="w-16 h-16 rounded-full border-2 border-[#7C3AED] dark:border-[#8B5CF6] p-0.5 object-cover" 
+                alt="Profile"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-full border-2 border-[#7C3AED] dark:border-[#8B5CF6] p-0.5 flex items-center justify-center bg-[#FAFAFA] dark:bg-[#171717] text-[#7C3AED] dark:text-[#8B5CF6] font-bold text-xl tracking-wider">
+                {getInitials(user?.fullName)}
+              </div>
+            )}
             <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></div>
           </div>
           <div className="flex-1">
@@ -163,6 +184,20 @@ export const Settings = () => {
             <p className="text-center text-[10px] text-gray-400 uppercase tracking-widest">
               Rabta for ITI Community • Version 1.0.0
             </p>
+          </div>
+
+          {/* Logout Button */}
+          <div 
+            className="flex items-center gap-4 p-4 mt-6 mb-8 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/30 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
+            onClick={handleLogout}
+          >
+            <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
+              <span className="material-icons-round">logout</span>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-bold text-red-600 dark:text-red-400">Log Out</h4>
+              <p className="text-xs text-red-500/80 dark:text-red-400/70">Sign out of your account securely</p>
+            </div>
           </div>
 
         </div>

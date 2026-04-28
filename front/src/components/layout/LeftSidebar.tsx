@@ -33,7 +33,7 @@ const LeftSidebar: React.FC = () => {
   // قائمة الروابط الأساسية كما ظهرت في ملفاتكم
   const navItems: NavItem[] = [
     { path: "/chats", icon: "chat_bubble", label: "Chats" },
-    { path: "/groups", icon: "groups", label: "Communities" },
+    { path: "/groups", icon: "groups", label: "Groups" },
     { path: "/bookmarks", icon: "bookmarks", label: "Saved" },
     { path: "/jobs", icon: "work_outline", label: "Jobs" },
     { path: "/calls", icon: "call", label: "Calls" },

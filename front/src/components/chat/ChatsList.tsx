@@ -11,6 +11,7 @@ export interface ChatItem {
   initials?: string;
   isOnline?: boolean;
   isGroup?: boolean; // لو جروب بياخد لون برتقالي، لو شات عادي بياخد بنفسجي
+  groupMembers?: string[];
 }
 
 interface ChatsListProps {

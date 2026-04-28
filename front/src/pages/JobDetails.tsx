@@ -54,7 +54,7 @@ export const JobDetails: React.FC = () => {
         setIsLoading(true);
         setError(null);
         const response: AxiosResponse<JobDetailApiResponse> = await axiosInstance.get(
-          `/v1/jobs/${jobId}`
+          `/jobs/${jobId}`
         );
 
         setJob(response.data.data.job);
@@ -91,7 +91,7 @@ export const JobDetails: React.FC = () => {
     try {
       setIsSending(true);
       await axiosInstance.post(
-        `/v1/jobs/${jobId}/apply`,
+        `/jobs/${jobId}/apply`,
         { skills: selectedSkills, note: applicationNote }
       );
 

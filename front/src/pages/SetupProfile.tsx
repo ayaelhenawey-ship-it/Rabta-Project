@@ -3,6 +3,7 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { updateProfile } from '../store/slices/authSlice';
 import { useNavigate } from 'react-router-dom';
 import { uploadProfilePicture } from '../api/auth';
+import axiosInstance from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { Popup } from '../components/ui/Popup';
 
@@ -11,7 +12,7 @@ const SetupProfile: React.FC = () => {
   const navigate = useNavigate();
   const user = useAppSelector((state) => state.auth.user);
   const [isAiOpen, setIsAiOpen] = useState(false);
-  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [showSuccessPopup] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
   // Redirect if profile is already complete
@@ -30,7 +31,9 @@ const SetupProfile: React.FC = () => {
     contactEmail: '',
     skills: [] as string[],
     links: [{ id: 1, platform: '', url: '' }],
-    projects: [{ id: 2, title: '', description: '', viewLink: '', githubLink: '' }]
+    projects: [{ id: 2, title: '', description: '', viewLink: '', githubLink: '' }],
+    companyName: '',
+    industry: ''
   });
 
   // --- دوال التحكم (Handlers) ---
@@ -110,16 +113,14 @@ const SetupProfile: React.FC = () => {
     e.preventDefault();
     try {
       const loadingToast = toast.loading("Saving profile...");
-      const response = await axios.patch('http://localhost:5001/api/v1/users/setup-profile', 
-        { ...formData, profileCompleted: true },
-        {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }
+      const response = await axiosInstance.patch('/profile/me', 
+        { ...formData, profileCompleted: true }
       );
       dispatch(updateProfile({ ...response.data.data.user, profileCompleted: true }));
       toast.success("Profile setup complete!", { id: loadingToast });
       navigate('/profile');
     } catch (error) {
+      console.error(error);
       toast.error("Failed to save profile.");
     }
   };
@@ -275,7 +276,7 @@ const SetupProfile: React.FC = () => {
                 </div>
               </div>
 
-              {/* 3. Professional Details */}
+              {/* 3. Professional Details & Conditional Sections */}
               <div>
                 <h3 className="text-xl font-bold mb-4 border-b border-[#171717]/10 dark:border-[#F5F5F5]/10 pb-2">3. Professional Details</h3>
 
@@ -284,50 +285,67 @@ const SetupProfile: React.FC = () => {
                   <textarea rows={5} placeholder="Tell potential clients about your background, experience, and what you excel at..." value={formData.detailedAbout} onChange={(e) => handleInputChange('detailedAbout', e.target.value)} className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg px-4 py-3 focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#8B5CF6] transition-all duration-300 placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40 resize-none" />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-bold mb-2">Technical Skills</label>
-                  <div className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg p-2 flex flex-wrap gap-2 focus-within:border-[#7C3AED] dark:focus-within:border-[#8B5CF6] transition-all duration-300">
-                    <input type="text" placeholder="Type a skill and press Enter..." className="bg-transparent border-none focus:outline-none grow min-w-50 px-2 py-1 text-[#171717] dark:text-[#F5F5F5] placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40" />
-                  </div>
-                </div>
-              </div>
-
-              {/* 4. Featured Projects */}
-              <div>
-                <div className="flex justify-between items-center mb-4 border-b border-[#171717]/10 dark:border-[#F5F5F5]/10 pb-2">
-                  <h3 className="text-xl font-bold">4. Featured Projects</h3>
-                  <button type="button" onClick={addProject} className="text-sm font-bold text-[#7C3AED] dark:text-[#8B5CF6] hover:underline">
-                    + Add Project
-                  </button>
-                </div>
-
-                {formData.projects.map(project => (
-                  <div key={project.id} className="bg-[#FAFAFA] dark:bg-[#171717] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-xl p-6 relative group mb-6">
-                    <button type="button" onClick={() => removeProject(project.id)} className="absolute top-4 right-4 text-red-500 hover:text-red-700 transition-colors">
-                      <span className="material-icons-round">delete_outline</span>
-                    </button>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4 mt-2">
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-bold mb-2">Project Title</label>
-                        <input type="text" placeholder="e.g. My Awesome App" value={project.title} onChange={(e) => handleProjectChange(project.id, 'title', e.target.value)} className="w-full bg-[#FFFFFF] dark:bg-[#262626] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg px-4 py-3 focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#8B5CF6] transition-all duration-300 placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40" />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-bold mb-2">Project Description</label>
-                        <textarea rows={3} placeholder="Briefly describe what this project is and what technologies you used..." value={project.description} onChange={(e) => handleProjectChange(project.id, 'description', e.target.value)} className="w-full bg-[#FFFFFF] dark:bg-[#262626] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg px-4 py-3 focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#8B5CF6] transition-all duration-300 placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40 resize-none" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold mb-2">View Project Link (Optional)</label>
-                        <input type="url" placeholder="https://..." value={project.viewLink} onChange={(e) => handleProjectChange(project.id, 'viewLink', e.target.value)} className="w-full bg-[#FFFFFF] dark:bg-[#262626] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg px-4 py-3 focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#8B5CF6] transition-all duration-300 placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold mb-2">GitHub Repo Link (Optional)</label>
-                        <input type="url" placeholder="https://github.com/..." value={project.githubLink} onChange={(e) => handleProjectChange(project.id, 'githubLink', e.target.value)} className="w-full bg-[#FFFFFF] dark:bg-[#262626] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg px-4 py-3 focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#8B5CF6] transition-all duration-300 placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40" />
+                {user?.role === 'employer' ? (
+                  <>
+                    <div className="mb-6">
+                      <label className="block text-sm font-bold mb-2">Company Name</label>
+                      <input type="text" placeholder="e.g. Acme Corp" value={formData.companyName} onChange={(e) => handleInputChange('companyName', e.target.value)} className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg px-4 py-3 focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#8B5CF6] transition-all duration-300 placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40" />
+                    </div>
+                    <div className="mb-6">
+                      <label className="block text-sm font-bold mb-2">Industry</label>
+                      <input type="text" placeholder="e.g. Technology, Healthcare, Finance" value={formData.industry} onChange={(e) => handleInputChange('industry', e.target.value)} className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg px-4 py-3 focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#8B5CF6] transition-all duration-300 placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-bold mb-2">Technical Skills</label>
+                      <div className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg p-2 flex flex-wrap gap-2 focus-within:border-[#7C3AED] dark:focus-within:border-[#8B5CF6] transition-all duration-300">
+                        <input type="text" placeholder="Type a skill and press Enter..." className="bg-transparent border-none focus:outline-none grow min-w-50 px-2 py-1 text-[#171717] dark:text-[#F5F5F5] placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40" />
                       </div>
                     </div>
-                  </div>
-                ))}
+                  </>
+                )}
               </div>
+
+              {/* 4. Featured Projects (Only for Freelancers) */}
+              {user?.role !== 'employer' && (
+                <div>
+                  <div className="flex justify-between items-center mb-4 border-b border-[#171717]/10 dark:border-[#F5F5F5]/10 pb-2">
+                    <h3 className="text-xl font-bold">4. Featured Projects</h3>
+                    <button type="button" onClick={addProject} className="text-sm font-bold text-[#7C3AED] dark:text-[#8B5CF6] hover:underline">
+                      + Add Project
+                    </button>
+                  </div>
+
+                  {formData.projects.map(project => (
+                    <div key={project.id} className="bg-[#FAFAFA] dark:bg-[#171717] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-xl p-6 relative group mb-6">
+                      <button type="button" onClick={() => removeProject(project.id)} className="absolute top-4 right-4 text-red-500 hover:text-red-700 transition-colors">
+                        <span className="material-icons-round">delete_outline</span>
+                      </button>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4 mt-2">
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-bold mb-2">Project Title</label>
+                          <input type="text" placeholder="e.g. My Awesome App" value={project.title} onChange={(e) => handleProjectChange(project.id, 'title', e.target.value)} className="w-full bg-[#FFFFFF] dark:bg-[#262626] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg px-4 py-3 focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#8B5CF6] transition-all duration-300 placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40" />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-bold mb-2">Project Description</label>
+                          <textarea rows={3} placeholder="Briefly describe what this project is and what technologies you used..." value={project.description} onChange={(e) => handleProjectChange(project.id, 'description', e.target.value)} className="w-full bg-[#FFFFFF] dark:bg-[#262626] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg px-4 py-3 focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#8B5CF6] transition-all duration-300 placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40 resize-none" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold mb-2">View Project Link (Optional)</label>
+                          <input type="url" placeholder="https://..." value={project.viewLink} onChange={(e) => handleProjectChange(project.id, 'viewLink', e.target.value)} className="w-full bg-[#FFFFFF] dark:bg-[#262626] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg px-4 py-3 focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#8B5CF6] transition-all duration-300 placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold mb-2">GitHub Repo Link (Optional)</label>
+                          <input type="url" placeholder="https://github.com/..." value={project.githubLink} onChange={(e) => handleProjectChange(project.id, 'githubLink', e.target.value)} className="w-full bg-[#FFFFFF] dark:bg-[#262626] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg px-4 py-3 focus:outline-none focus:border-[#7C3AED] dark:focus:border-[#8B5CF6] transition-all duration-300 placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="mt-4 flex justify-end gap-4 border-t border-[#171717]/10 dark:border-[#F5F5F5]/10 pt-6">

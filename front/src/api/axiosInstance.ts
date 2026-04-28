@@ -3,7 +3,7 @@ import axios from "axios";
 // 1. إنشاء الـ Instance الأساسي
 const axiosInstance = axios.create({
   // بنقرا رابط الباك-إند من ملف الـ .env، ولو مش موجود بنستخدم اللوكال هوست مؤقتاً
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api",
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1",
   timeout: 10000, // أقصى وقت للرد (10 ثواني)
   headers: {
     "Content-Type": "application/json",

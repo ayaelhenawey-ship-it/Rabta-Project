@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./components/layout/ProtectedRoute";
 import { PublicRoute } from "./components/layout/PublicRoute";
 import { Login } from "./pages/Login";
+import { LoginSuccess } from "./pages/LoginSuccess";
 import { Signup } from "./pages/Signup";
 import { Settings } from "./pages/Settings";
 import { ForgotPassword } from "./pages/ForgotPassword";
@@ -18,11 +19,13 @@ import { SavedContent } from './pages/SavedPage';
 import { Notifications } from './pages/Notifications';
 import { Privacy } from './pages/Privacy';
 import { JobsBoard } from './pages/JobsBoard';
+import { JobDetails } from './pages/JobDetails';
 import { CallsPage } from './pages/CallsPage';
 import { SharedContent } from './pages/SharedContent';
 
 import CreateGroup from './components/Groups/CreateGroup'; 
 import JoinGroup from './components/Groups/JoinGroup';
+import GroupDetails from './components/Groups/GroupDetails';
 
 import RequestAccess from "./pages/employer/RequestAccess";
 import EmployerRegister from "./pages/employer/EmployerRegister";
@@ -31,6 +34,13 @@ import EmployerSetup from "./pages/employer/EmployerSetup";
 import { useSelector } from "react-redux";
 import type { RootState } from "./store/store";
 import EmployerProfile from "./pages/employer/EmployerProfile";
+import EmployerDashboard from "./pages/employer/EmployerDashboard";
+import PostJob from "./pages/employer/PostJob";
+import ManageProject from "./pages/employer/ManageProject";
+import EditProject from "./pages/employer/EditProject";
+import FreelancerProfile from "./pages/employer/FreelancerProfile";
+import AppliedProjects from "./pages/freelancer/AppliedProjects";
+import FreelancerDashboard from "./pages/freelancer/FreelancerDashboard";
 
 function App() {
   const user = useSelector((state: RootState) => state.auth.user);
@@ -40,6 +50,7 @@ function App() {
       <Route path="/" element={<Splash />} />
 
       {/* صفحة الـ Login والـ Signup */}
+      <Route path="/login-success" element={<LoginSuccess />} />
       <Route element={<PublicRoute />}>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
@@ -53,7 +64,9 @@ function App() {
         <Route element={<MainLayout />}>
           <Route path="/chats" element={<HomeFeed />} />
           <Route path="/groups" element={<GroupsFeed />} />
+          <Route path="/groups/:id" element={<GroupDetails />} />
           <Route path="/jobs" element={<JobsBoard />} />
+          <Route path="/jobs/:jobId" element={<JobDetails />} />
           <Route path="/calls" element={<CallsPage />} />
           <Route path="/shared/:id" element={<SharedContent />} />
           
@@ -74,6 +87,13 @@ function App() {
           
           <Route path="/settings" element={<Settings />} />
           <Route path="/employer/setup" element={<EmployerSetup />} />
+          <Route path="/employer-dashboard" element={<EmployerDashboard />} />
+          <Route path="/post-job" element={<PostJob />} />
+          <Route path="/manage-project/:id" element={<ManageProject />} />
+          <Route path="/edit-project/:id" element={<EditProject />} />
+          <Route path="/freelancer-profile/:id" element={<FreelancerProfile />} />
+          <Route path="/applied-projects" element={<AppliedProjects />} />
+          <Route path="/freelancer-dashboard" element={<FreelancerDashboard />} />
         </Route>
       </Route>
 

@@ -97,4 +97,132 @@ const PostCard: React.FC<{ post: Post }> = ({ post }) => {
  * 4. عرض error state إذا حدث خطأ
  * 5. عرض قائمة البوستات باستخدام .map()
  */
-export const PostList: React.FC = () => {\n  const dispatch = useAppDispatch();\n\n  // ✅ Get data من Redux store \n  // استخدم useAppSelector بدل useSelector للحصول على type safety\n  const posts = useAppSelector((state) => state.posts.items);\n  const loading = useAppSelector((state) => state.posts.loading);\n  const error = useAppSelector((state) => state.posts.error);\n  const user = useAppSelector((state) => state.auth.user);\n\n  /**\n   * ✅ Dispatch fetchPosts عند تحميل الـ component\n   * استخدم useEffect مع dependency array [dispatch]\n   * عشان نحط اللـ dispatch مره واحده فقط عند التحميل الأول\n   */\n  useEffect(() => {\n    dispatch(fetchPosts());\n  }, [dispatch]);\n\n  // ============================================================================\n  // LOADING STATE\n  // ============================================================================\n  if (loading && posts.length === 0) {\n    return (\n      <div className=\"flex items-center justify-center min-h-screen\">\n        <div className=\"text-center\">\n          <div className=\"flex justify-center mb-4\">\n            <div className=\"animate-spin rounded-full h-12 w-12 border-b-2 border-[#7C3AED] dark:border-[#8B5CF6]\"></div>\n          </div>\n          <p className=\"text-gray-600 dark:text-gray-400 font-medium\">\n            جاري تحميل البوستات...\n          </p>\n        </div>\n      </div>\n    );\n  }\n\n  // ============================================================================\n  // ERROR STATE\n  // ============================================================================\n  if (error) {\n    return (\n      <div className=\"flex items-center justify-center min-h-screen\">\n        <div className=\"bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md text-center\">\n          <div className=\"text-3xl mb-2\">⚠️</div>\n          <h3 className=\"text-lg font-bold text-red-600 dark:text-red-400 mb-2\">\n            حدث خطأ\n          </h3>\n          <p className=\"text-red-600 dark:text-red-300 text-sm mb-4\">\n            {error}\n          </p>\n          <button\n            onClick={() => dispatch(fetchPosts())}\n            className=\"bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors\"\n          >\n            جرب مرة أخرى\n          </button>\n        </div>\n      </div>\n    );\n  }\n\n  // ============================================================================\n  // EMPTY STATE\n  // ============================================================================\n  if (!loading && posts.length === 0) {\n    return (\n      <div className=\"flex items-center justify-center min-h-screen\">\n        <div className=\"text-center text-gray-500 dark:text-gray-400\">\n          <div className=\"text-5xl mb-4\">📝</div>\n          <p className=\"text-lg font-medium\">ما في بوستات حالياً...</p>\n          <p className=\"text-sm mt-2\">كن أول من يشارك شيء جديد! 🚀</p>\n        </div>\n      </div>\n    );\n  }\n\n  // ============================================================================\n  // SUCCESS STATE - عرض البوستات\n  // ============================================================================\n  return (\n    <div className=\"min-h-screen bg-[#FAFAFA] dark:bg-[#171717] py-6\">\n      <div className=\"max-w-2xl mx-auto px-4\">\n        {/* Header */}\n        <div className=\"mb-8\">\n          <h1 className=\"text-3xl font-bold text-[#171717] dark:text-[#F5F5F5] mb-2\">\n            أهلاً {user?.name}! 👋\n          </h1>\n          <p className=\"text-gray-600 dark:text-gray-400\">\n            {posts.length} بوست\n          </p>\n        </div>\n\n        {/* ✅ KEY PART: تعيين البوستات من Redux Store */}\n        {/* استخدم .map() لـ render كل بوست */}\n        <div className=\"space-y-4\">\n          {posts.map((post: Post) => (\n            <PostCard key={post.id} post={post} />\n          ))}\n        </div>\n\n        {/* Load More Button (اختياري) */}\n        {loading && posts.length > 0 && (\n          <div className=\"flex justify-center mt-8\">\n            <div className=\"text-sm text-gray-500 dark:text-gray-400\">\n              جاري تحميل المزيد...\n            </div>\n          </div>\n        )}\n      </div>\n    </div>\n  );\n};\n\nexport default PostList;\n\n/**\n * ============================================================================\n * استخدام هذا الـ Component\n * ============================================================================\n * \n * في ملف routing أو App.tsx:\n * \n * import PostList from './components/PostList';\n * \n * <Route path=\"/feed\" element={<PostList />} />\n * \n * ============================================================================\n */\n
+export const PostList: React.FC = () => {
+  const dispatch = useAppDispatch();
+
+  // ✅ Get data من Redux store 
+  // استخدم useAppSelector بدل useSelector للحصول على type safety
+  const posts = useAppSelector((state) => state.posts.items);
+  const loading = useAppSelector((state) => state.posts.loading);
+  const error = useAppSelector((state) => state.posts.error);
+  const user = useAppSelector((state) => state.auth.user);
+
+  /**
+   * ✅ Dispatch fetchPosts عند تحميل الـ component
+   * استخدم useEffect مع dependency array [dispatch]
+   * عشان نحط اللـ dispatch مره واحده فقط عند التحميل الأول
+   */
+  useEffect(() => {
+    dispatch(fetchPosts());
+  }, [dispatch]);
+
+  // ============================================================================
+  // LOADING STATE
+  // ============================================================================
+  if (loading && posts.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="flex justify-center mb-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7C3AED] dark:border-[#8B5CF6]"></div>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 font-medium">
+            جاري تحميل البوستات...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // ERROR STATE
+  // ============================================================================
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md text-center">
+          <div className="text-3xl mb-2">⚠️</div>
+          <h3 className="text-lg font-bold text-red-600 dark:text-red-400 mb-2">
+            حدث خطأ
+          </h3>
+          <p className="text-red-600 dark:text-red-300 text-sm mb-4">
+            {error}
+          </p>
+          <button
+            onClick={() => dispatch(fetchPosts())}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            جرب مرة أخرى
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // EMPTY STATE
+  // ============================================================================
+  if (!loading && posts.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center text-gray-500 dark:text-gray-400">
+          <div className="text-5xl mb-4">📝</div>
+          <p className="text-lg font-medium">ما في بوستات حالياً...</p>
+          <p className="text-sm mt-2">كن أول من يشارك شيء جديد! 🚀</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // SUCCESS STATE - عرض البوستات
+  // ============================================================================
+  return (
+    <div className="min-h-screen bg-[#FAFAFA] dark:bg-[#171717] py-6">
+      <div className="max-w-2xl mx-auto px-4">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-[#171717] dark:text-[#F5F5F5] mb-2">
+            أهلاً {user?.name}! 👋
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            {posts.length} بوست
+          </p>
+        </div>
+
+        {/* ✅ KEY PART: تعيين البوستات من Redux Store */}
+        {/* استخدم .map() لـ render كل بوست */}
+        <div className="space-y-4">
+          {posts.map((post: Post) => (
+            <PostCard key={post.id} post={post} />
+          ))}
+        </div>
+
+        {/* Load More Button (اختياري) */}
+        {loading && posts.length > 0 && (
+          <div className="flex justify-center mt-8">
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              جاري تحميل المزيد...
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default PostList;
+
+/**
+ * ============================================================================
+ * استخدام هذا الـ Component
+ * ============================================================================
+ * 
+ * في ملف routing أو App.tsx:
+ * 
+ * import PostList from './components/PostList';
+ * 
+ * <Route path="/feed" element={<PostList />} />
+ * 
+ * ============================================================================
+ */

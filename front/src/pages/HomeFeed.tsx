@@ -5,12 +5,13 @@ import { ChatWindow, type MessageType } from '../components/chat/ChatWindow';
 import { EmptyChatState } from '../components/chat/EmptyChatState';
 import axiosInstance from '../api/axiosInstance';
 import toast from 'react-hot-toast';
+import { useChat } from '../context/ChatContext';
 
 export const HomeFeed = () => {
   
   // 1. State: تخزين المحادثات والرسائل (دايناميك بالكامل)
   const [chats, setChats] = useState<ChatItem[]>([]);
-  const [messages, setMessages] = useState<MessageType[]>([]);
+  const [messages] = useState<MessageType[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [, setIsLoadingChats] = useState(true);
   
@@ -23,7 +24,18 @@ export const HomeFeed = () => {
       try {
         setIsLoadingChats(true);
         const response = await axiosInstance.get('/chats');
-        setChats(response.data.data.chats);
+        const formattedChats = response.data.data.chats.map((c: any) => ({
+          id: c._id,
+          name: c.groupName || (c.users.find((u: any) => u._id !== JSON.parse(localStorage.getItem('user') || '{}')._id)?.fullName) || 'Chat',
+          lastMessage: c.latestMessage?.content || 'No messages yet',
+          time: c.latestMessage?.createdAt ? new Date(c.latestMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+          avatar: c.groupName ? undefined : c.users.find((u: any) => u._id !== JSON.parse(localStorage.getItem('user') || '{}')._id)?.avatar,
+          initials: c.groupName ? c.groupName.substring(0, 2).toUpperCase() : c.users.find((u: any) => u._id !== JSON.parse(localStorage.getItem('user') || '{}')._id)?.fullName?.substring(0, 2).toUpperCase() || 'CH',
+          isOnline: false,
+          isGroup: c.isGroup,
+          groupMembers: c.isGroup ? c.users.map((u: any) => u.fullName) : []
+        }));
+        setChats(formattedChats);
       } catch (error) {
         toast.error("Failed to load chats");
       } finally {
@@ -33,28 +45,43 @@ export const HomeFeed = () => {
     fetchChats();
   }, []);
 
-  // 4. Effect: جلب الرسائل لما اليوزر يختار شات معين
+  const { socket } = useChat();
+
+  // 4. Effect: Join all chat rooms and listen to incoming messages to update the sidebar dynamically
   useEffect(() => {
-    if (activeChatId) {
-      const fetchMessages = async () => {
-        try {
-          const response = await axiosInstance.get(`/chats/${activeChatId}/messages`);
-          // تحويل شكل الرسائل من الباك لشكل الفرونت
-          const formatted = response.data.data.messages.map((m: any) => ({
-            id: m._id,
-            type: m.messageType === 'file' ? 'file' : 'text',
-            content: m.content,
-            time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            isMine: m.senderId._id === JSON.parse(localStorage.getItem('user') || '{}')._id || m.senderId === JSON.parse(localStorage.getItem('user') || '{}')._id
-          }));
-          setMessages(formatted);
-        } catch (error) {
-          toast.error("Failed to load messages");
+    if (!socket || chats.length === 0) return;
+
+    // Join all chat rooms
+    chats.forEach(chat => {
+      socket.emit('join-room', chat.id);
+    });
+
+    const handleReceiveMessage = (message: any) => {
+      setChats(prevChats => {
+        const chatIndex = prevChats.findIndex(c => c.id === message.chatId);
+        if (chatIndex > -1) {
+          const updatedChats = [...prevChats];
+          const isAudio = message.messageType === 'audio' || (message.content && message.content.startsWith('blob:'));
+          updatedChats[chatIndex] = {
+            ...updatedChats[chatIndex],
+            lastMessage: isAudio ? 'Voice note' : message.content,
+            time: new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          
+          // Move the updated chat to the top of the list
+          const [chatToMove] = updatedChats.splice(chatIndex, 1);
+          return [chatToMove, ...updatedChats];
         }
-      };
-      fetchMessages();
-    }
-  }, [activeChatId]);
+        return prevChats;
+      });
+    };
+
+    socket.on('receive-message', handleReceiveMessage);
+
+    return () => {
+      socket.off('receive-message', handleReceiveMessage);
+    };
+  }, [socket, chats.length]); // Only re-run when socket connects or chat count changes
 
   // تحديد بيانات الشات المفتوح حالياً لتمريرها كـ Props
   const activeChat = chats.find(c => c.id === activeChatId);
@@ -69,12 +96,14 @@ export const HomeFeed = () => {
         onSelectChat={setActiveChatId} 
       />
 
-      {/* 2. مساحة المحتوى: لو فيه شات اختاره افتحه، غير كده هات الشاشة الفاضية */}
       {activeChatId && activeChat ? (
         <ChatWindow 
+          chatId={activeChatId}
           chatName={activeChat.name} 
           isOnline={activeChat.isOnline || false} 
+          isGroup={activeChat.isGroup || false}
           messages={messages} 
+          groupMembers={activeChat.groupMembers}
         />
       ) : (
         <EmptyChatState onNewMessage={() => setShowNewMessage(true)} />
