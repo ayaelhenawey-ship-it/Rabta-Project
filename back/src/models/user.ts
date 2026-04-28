@@ -8,7 +8,7 @@ export interface IUser extends Document {
   password?: string;
   phoneNumber?: string;
   googleId?: string;
-  role: 'student' | 'freelancer' | 'employer';
+  role: 'freelancer' | 'employer';
   profileComplete: boolean;
   // Common fields
   jobTitle?: string;
@@ -92,8 +92,8 @@ const UserSchema: Schema = new Schema({
   },
   role: {
     type: String,
-    enum: ['student', 'freelancer', 'employer'],
-    default: 'student',
+    enum: ['freelancer', 'employer'],
+    default: 'freelancer',
     required: [true, 'User role is required']
   },
   profileComplete: {

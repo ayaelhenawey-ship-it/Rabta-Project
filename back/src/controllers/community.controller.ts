@@ -4,13 +4,14 @@ import Post from '../models/Post';
 import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
 import * as aiService from '../services/ai.service';
+import Chat from '../models/chat';
 
 export const listCommunities = catchAsync(async (req: Request, res: Response) => {
   const { category } = req.query;
   const filter: any = {};
   if (category) filter.category = category;
   
-  const communities = await Community.find(filter);
+  const communities = await Community.find(filter).populate('members', 'fullName');
   res.status(200).json({
     status: 'success',
     data: { communities }
@@ -21,6 +22,13 @@ export const createCommunity = catchAsync(async (req: Request, res: Response) =>
   const { name, description, category, tags, isPublic } = req.body;
   const owner = (req.user as any)._id;
 
+  const communityChat = await Chat.create({
+    isGroup: true,
+    groupName: name,
+    users: [owner],
+    admins: [owner]
+  });
+
   const community = await Community.create({
     name,
     description,
@@ -29,7 +37,8 @@ export const createCommunity = catchAsync(async (req: Request, res: Response) =>
     isPublic,
     owner,
     admins: [owner],
-    members: [owner]
+    members: [owner],
+    chatId: communityChat._id
   });
 
   res.status(201).json({
@@ -49,6 +58,12 @@ export const joinCommunity = catchAsync(async (req: Request, res: Response, next
 
   community.members.push(userId);
   await community.save();
+
+  if (community.chatId) {
+    await Chat.findByIdAndUpdate(community.chatId, {
+      $addToSet: { users: userId }
+    });
+  }
 
   res.status(200).json({
     status: 'success',

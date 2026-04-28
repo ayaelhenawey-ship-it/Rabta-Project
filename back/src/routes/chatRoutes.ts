@@ -9,7 +9,8 @@ import {
   removeFromGroup,
   leaveGroupChat,
   sendMessage,
-  getSharedContent
+  getSharedContent,
+  clearChatHistory
 } from '../controllers/chat.controller';
 
 const router = Router();
@@ -33,6 +34,9 @@ router.post('/:id/send', sendMessage);
 
 // جلب المحتوى المشارك في شات معين
 router.get('/:id/shared', getSharedContent);
+
+// حذف الشات
+router.delete('/:id/clear', clearChatHistory);
 
 // ==========================================
 // 📜 مسار تاريخ الرسائل (History)

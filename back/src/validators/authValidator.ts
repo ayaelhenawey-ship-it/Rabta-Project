@@ -21,7 +21,7 @@ export const registerValidator = [
 
   check('role')
     .notEmpty().withMessage('Role is required')
-    .isIn(['student', 'freelancer', 'employer']).withMessage('Role must be student, freelancer, or employer'),
+    .isIn(['freelancer', 'employer']).withMessage('Role must be freelancer or employer'),
 
   // بعد ما نكتب القواعد، بنوقف الحارس على الباب
   validatorMiddleware

@@ -49,7 +49,9 @@ export const listJobs = catchAsync(async (req: Request, res: Response) => {
       salaryOrBudget: jobObj.budgetOrSalary || 'Negotiable',
       experienceLevel: 'Intermediate', 
       tags: jobObj.requiredSkills || [],
-      matchPercentage
+      matchPercentage,
+      publisherId: publisher._id,
+      applicantsCount: jobObj.applicants?.length || 0
     };
   });
 
@@ -117,5 +119,68 @@ export const getApplicants = catchAsync(async (req: Request, res: Response, next
   res.status(200).json({
     status: 'success',
     data: { applicants: job.applicants }
+  });
+});
+
+export const updateJob = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const job = await Job.findById(req.params.id);
+  if (!job) return next(new AppError('Job not found', 404));
+
+  if (job.publisherId.toString() !== (req.user as any)._id.toString()) {
+    return next(new AppError('You are not authorized to update this job', 403));
+  }
+
+  const updatedJob = await Job.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+    runValidators: true
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: { job: updatedJob }
+  });
+});
+
+export const getAppliedJobs = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const userId = (req.user as any)._id;
+
+  // Find all jobs where the applicants array contains an object with userId matching the current user
+  const jobs = await Job.find({ 'applicants.userId': userId })
+    .populate('publisherId', 'companyName')
+    .select('title publisherId applicants.status applicants.appliedAt applicants.userId');
+
+  // Format the data for the frontend
+  const formattedJobs = jobs.map(job => {
+    // Find the specific application for this user
+    const application = job.applicants?.find(app => app.userId.toString() === userId.toString());
+    
+    return {
+      id: job._id,
+      title: job.title,
+      employer: (job.publisherId as any)?.companyName || 'Unknown Employer',
+      appliedAt: application?.appliedAt,
+      status: application?.status || 'pending'
+    };
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: { applications: formattedJobs }
+  });
+});
+
+export const deleteJob = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const job = await Job.findById(req.params.id);
+  if (!job) return next(new AppError('Job not found', 404));
+
+  if (job.publisherId.toString() !== (req.user as any)._id.toString()) {
+    return next(new AppError('You are not authorized to delete this job', 403));
+  }
+
+  await Job.findByIdAndDelete(req.params.id);
+
+  res.status(204).json({
+    status: 'success',
+    data: null
   });
 });

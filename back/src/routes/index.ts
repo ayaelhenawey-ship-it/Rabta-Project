@@ -52,47 +52,8 @@ router.get('/users', catchAsync(async (req: Request, res: Response, next: NextFu
   res.status(200).json(users);
 }));
 
-// مسار التسجيل (Register)
-router.post('/auth/register', catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const { fullName, email, password, phoneNumber, role, trackName } = req.body;
-
-  if (!phoneNumber) {
-    return next(new AppError('Phone number is required!', 400));
-  }
-
-  const existingUser = await User.findOne({
-    $or: [{ email: email }, { phoneNumber: phoneNumber }]
-  });
-
-  if (existingUser) {
-    return next(new AppError('The email or phone number is already registered!', 400));
-  }
-
-  const newUser = new User({
-    fullName, email, password, phoneNumber, role, trackName
-  });
-
-  const savedUser = await newUser.save();
-
-  const token = jwt.sign(
-    { id: savedUser._id, role: savedUser.role },
-    process.env.JWT_SECRET as string,
-    { expiresIn: '7d' }
-  );
-
-  res.status(201).json({
-    status: 'success',
-    message: "The account has been successfully created",
-    token: token,
-    user: {
-      id: savedUser._id,
-      fullName: savedUser.fullName,
-      email: savedUser.email,
-      phoneNumber: savedUser.phoneNumber,
-      role: savedUser.role
-    }
-  });
-}));
+// NOTE: /auth/register and /auth/login are handled by authRoutes.ts
+// mounted at /api/v1/auth in server.ts — do NOT add duplicate routes here.
 
 
 // مسار ربط حساب جوجل (مسار محمي)
