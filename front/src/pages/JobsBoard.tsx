@@ -3,6 +3,7 @@ import { type AxiosResponse, isAxiosError } from "axios";
 import axiosInstance from "../api/axiosInstance";
 import { useNavigate } from "react-router-dom";
 import { AiAssistant } from "../components/shared/AiAssistant";
+import { useAppSelector } from "../store/hooks";
 // ==========================================
 // 1. Interfaces
 // ==========================================
@@ -35,10 +36,13 @@ interface JobsApiResponse {
 // 2. Component
 // ==========================================
 export const JobsBoard: React.FC = () => {
+  // Grab the current user from Redux to enable role-based UI rendering
+  const { user } = useAppSelector((state) => state.auth);
+
   // --- States ---
   const [jobs, setJobs] = useState<JobType[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null); // 💡 ضفنا State للأخطاء
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   // States للفلترة والبحث
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -409,11 +413,18 @@ export const JobsBoard: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <button className="text-gray-400 hover:text-[#8B5CF6] transition-colors p-2">
-                      <span className="material-icons-round">
-                        {job.isSaved ? "bookmark" : "bookmark_border"}
-                      </span>
-                    </button>
+                    {/* ✅ Role-Based Visibility: Only Freelancers see the Save button */}
+                    {user?.role === 'freelancer' && (
+                      <button
+                        title={job.isSaved ? 'Unsave Job' : 'Save Job'}
+                        onClick={(e) => { e.stopPropagation(); /* handleSave(job._id) */ }}
+                        className="text-gray-400 hover:text-[#8B5CF6] transition-colors p-2"
+                      >
+                        <span className="material-icons-round">
+                          {job.isSaved ? 'bookmark' : 'bookmark_border'}
+                        </span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap gap-2 mb-4">

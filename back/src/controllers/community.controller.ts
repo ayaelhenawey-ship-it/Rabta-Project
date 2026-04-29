@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import Community from '../models/Community';
 import Post from '../models/Post';
+import Message from '../models/Message';
 import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
 import * as aiService from '../services/ai.service';
@@ -8,13 +9,37 @@ import Chat from '../models/chat';
 
 export const listCommunities = catchAsync(async (req: Request, res: Response) => {
   const { category } = req.query;
+  const userId = (req.user as any)._id.toString();
   const filter: any = {};
   if (category) filter.category = category;
   
-  const communities = await Community.find(filter).populate('members', 'fullName');
+  const communities = await Community.find(filter)
+    .populate('members', 'fullName')
+    .populate({
+      path: 'chatId',
+      populate: {
+        path: 'latestMessage',
+        populate: { path: 'senderId', select: 'fullName' }
+      }
+    });
+  
+  // Calculate unread counts for each community
+  const communitiesWithUnread = await Promise.all(communities.map(async (community) => {
+    let unreadCount = 0;
+    // Only calculate if the user is a member of this community
+    if (community.chatId && community.members.some(m => m._id.toString() === userId)) {
+      unreadCount = await Message.countDocuments({
+        chatId: community.chatId,
+        senderId: { $ne: userId },
+        readBy: { $ne: userId }
+      });
+    }
+    return { ...community.toObject(), unreadCount };
+  }));
+
   res.status(200).json({
     status: 'success',
-    data: { communities }
+    data: { communities: communitiesWithUnread }
   });
 });
 

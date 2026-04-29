@@ -52,12 +52,15 @@ app.use('/uploads', express.static('uploads'));
 // 🔌 تغليف السيرفر وتهيئة Socket.io (السنترال)
 // ==========================================
 const server = http.createServer(app);
-const io = new Server(server, {
+export const io = new Server(server, {
   cors: {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE']
   }
 });
+
+// إتاحة الـ io كمتغير في الـ app عشان نقدر نستخدمه في أي Controller بدون Circular Dependency
+app.set('io', io);
 
 export const userSocketMap = new Map<string, string>();
 
@@ -149,6 +152,23 @@ io.on('connection', (socket) => {
   // ==========================================
   socket.on('send-message', async (data: { chatId: string, content: string, messageType?: string }) => {
     try {
+      // 🚫 Block Check: prevent messages between blocked users
+      const Chat = require('./models/chat').default;
+      const { User } = require('./models/user');
+      const chat = await Chat.findById(data.chatId);
+      if (chat && !chat.isGroup) {
+        const otherUserId = chat.members.find((id: any) => id.toString() !== authenticatedUserId)?.toString();
+        if (otherUserId) {
+          const sender = await User.findById(authenticatedUserId).select('blockedUsers');
+          const receiver = await User.findById(otherUserId).select('blockedUsers');
+          const senderBlockedReceiver = sender?.blockedUsers?.some((id: any) => id.toString() === otherUserId);
+          const receiverBlockedSender = receiver?.blockedUsers?.some((id: any) => id.toString() === authenticatedUserId);
+          if (senderBlockedReceiver || receiverBlockedSender) {
+            return socket.emit('message-error', { message: 'You cannot send messages to this user.' });
+          }
+        }
+      }
+
       // حفظ الرسالة في الداتا بيز
       const savedMessage = await chatService.createMessage({
         chatId: data.chatId,
@@ -170,51 +190,98 @@ io.on('connection', (socket) => {
   });
 
   // ==========================================
+  // 📨 تحديث حالة الرسائل (Message ACKs: Delivered / Read)
+  // ==========================================
+  socket.on('message_delivered', async (data: { messageId: string, chatId: string }) => {
+    try {
+      const Message = require('./models/Message').default;
+      const msg = await Message.findById(data.messageId);
+      if (msg && msg.status !== 'read') {
+        msg.status = 'delivered';
+        await msg.save();
+        io.to(data.chatId).emit('message-status-update', { messageId: data.messageId, chatId: data.chatId, status: 'delivered' });
+      }
+    } catch (err) {
+      console.error("Error updating delivered status:", err);
+    }
+  });
+
+  socket.on('message_read', async (data: { messageId: string, chatId: string }) => {
+    try {
+      const Message = require('./models/Message').default;
+      const msg = await Message.findById(data.messageId);
+      if (msg && msg.status !== 'read') {
+        msg.status = 'read';
+        if (!msg.readBy.includes(authenticatedUserId)) {
+          msg.readBy.push(authenticatedUserId);
+        }
+        await msg.save();
+        io.to(data.chatId).emit('message-status-update', { messageId: data.messageId, chatId: data.chatId, status: 'read', readBy: authenticatedUserId });
+      }
+    } catch (err) {
+      console.error("Error updating read status:", err);
+    }
+  });
+
+  // ==========================================
   // ✍️ حالة الكتابة (Typing Indicator)
   // ==========================================
   socket.on('typing', (data: { chatId: string }) => {
-    // بنبعت لكل اللي في الغرفة ماعدا المرسل (عشان مش هيعرض لنفسه إنه بيكتب)
-    socket.to(data.chatId).emit('user-typing', {
-      userId: authenticatedUserId,
-      chatId: data.chatId
-    });
+    socket.to(data.chatId).emit('user-typing', { userId: authenticatedUserId, chatId: data.chatId });
   });
 
   socket.on('stop-typing', (data: { chatId: string }) => {
-    socket.to(data.chatId).emit('user-stop-typing', {
-      userId: authenticatedUserId,
-      chatId: data.chatId
-    });
+    socket.to(data.chatId).emit('user-stop-typing', { userId: authenticatedUserId, chatId: data.chatId });
   });
 
   // ==========================================
-  // 📞 أحداث المكالمات (Call Events) - موجودة من قبل
+  // 📞 أحداث المكالمات (Call Events)
   // ==========================================
-  socket.on('call-user', async (data: { userToCall: string, signalData: any, from: string, callerName: string }) => {
-    console.log("🚨 The server received an event call-user Successfully! And the data is:", data);
+  socket.on('call-user', async (data: { userToCall: string, signalData: any, from: string, callerName: string, callerAvatar?: string, callType?: 'voice' | 'video', chatId?: string }) => {
     try {
+      // ✅ Use forwarded chatId directly; only do the lookup as a fallback
+      let resolvedChatId = data.chatId;
+      if (!resolvedChatId) {
+        const Chat = require('./models/chat').default;
+        const chat = await Chat.findOne({
+          isGroup: false,
+          users: { $all: [data.from, data.userToCall] }
+        });
+        resolvedChatId = chat?._id?.toString();
+      }
+
       const newCall = await Call.create({
-        caller: data.from,      
-        receiver: data.userToCall, 
-        type: 'video',
-        status: 'missed' 
+        caller: data.from,
+        receiver: data.userToCall,
+        receiverModel: 'User',
+        chatId: resolvedChatId,
+        type: data.callType || 'video',
+        status: 'missed'
       });
+      console.log(`📞 [call-user] Saved call type=${newCall.type}, chatId=${resolvedChatId}, id=${newCall._id}`);
+
+      // ✅ ALWAYS send callId back to caller so they can cancel/end it properly, even if receiver is offline
+      socket.emit('call-delivered', { callId: newCall._id.toString() });
 
       const receiverSocketId = userSocketMap.get(data.userToCall);
-      
+
       if (receiverSocketId) {
         io.to(receiverSocketId).emit('incoming-call', {
           signal: data.signalData,
           from: data.from,
           callerName: data.callerName,
-          callId: newCall._id 
+          callerAvatar: data.callerAvatar || '',
+          callType: data.callType || 'video',
+          callId: newCall._id.toString(),
+          chatId: resolvedChatId || ''
         });
-        console.log(`📞 A ringtone from [${data.from}] to [${data.userToCall}] - Registered`);
+        console.log(`📞 [${data.callType || 'video'}] call from [${data.from}] to [${data.userToCall}] — delivered to socket`);
       } else {
         socket.emit('user-offline', { message: 'The user is currently offline' });
+        console.log(`⚠️ [call-user] Receiver [${data.userToCall}] is offline. Call saved as missed.`);
       }
-    } catch (error) {
-      console.log("Error saving call:", error);
+    } catch (error: any) {
+      console.error("CRITICAL DB ERROR CREATING 1-TO-1 CALL:", error.message, error.errors);
     }
   });
 
@@ -226,19 +293,209 @@ io.on('connection', (socket) => {
       const callerSocketId = userSocketMap.get(data.to);
       if (callerSocketId) {
         io.to(callerSocketId).emit('call-accepted', data.signal);
-        console.log(`✅ The call was opened with [${data.to}] - The status has been updated`);
+        console.log(`✅ Call [${data.callId}] accepted — status updated`);
       }
     } catch (error) {
       console.log("Error updating call:", error);
     }
   });
 
-  socket.on('end-call', (data: { to: string }) => {
-    const receiverSocketId = userSocketMap.get(data.to);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('call-ended');
-      console.log(`🚫 Line lock device: [${data.to}]`);
+  // 🔴 Receiver explicitly rejects the call
+  socket.on('reject-call', async (data: any) => {
+    try {
+      let callDoc: any;
+      if (data.callId) {
+        callDoc = await Call.findByIdAndUpdate(data.callId, { status: data.status || 'rejected' }, { new: true });
+      } else if (data.caller && data.receiver && data.chatId) {
+        // Fallback if callId was missed: Create it now
+        callDoc = await Call.create({
+          caller: data.caller, receiver: data.receiver, receiverModel: data.receiverModel || 'User',
+          chatId: data.chatId, type: data.type || 'video', status: data.status || 'rejected', duration: data.duration || 0
+        });
+      }
+      
+      const effectiveChatId = callDoc?.chatId?.toString() || data.chatId;
+      if (effectiveChatId) {
+        const callType = callDoc?.type || data.type || 'voice';
+        const content = `Rejected ${callType} call`;
+        const savedMessage = await chatService.createMessage({
+          chatId: effectiveChatId,
+          senderId: callDoc?.caller?.toString() || data.caller || '',
+          content,
+          messageType: 'call_summary'
+        });
+        io.to(effectiveChatId).emit('receive-message', savedMessage);
+      }
+      
+      const toId = data.to || data.caller; // Fallback for 'to' using unified payload
+      const callerSocketId = userSocketMap.get(toId);
+      if (callerSocketId) io.to(callerSocketId).emit('call-rejected');
+      console.log(`🚫 Call [${data.callId || 'fallback'}] rejected`);
+    } catch (error: any) {
+      console.error("CRITICAL DB ERROR REJECTING CALL:", error.message, error.errors);
     }
+  });
+
+  // ❌ Caller cancels before answer (or ring timeout)
+  socket.on('cancel-call', async (data: any) => {
+    try {
+      let callDoc: any;
+      if (data.callId) {
+        callDoc = await Call.findByIdAndUpdate(data.callId, { status: data.status || 'missed' }, { new: true });
+      } else if (data.caller && data.receiver && data.chatId) {
+        // Fallback creation
+        callDoc = await Call.create({
+          caller: data.caller, receiver: data.receiver, receiverModel: data.receiverModel || 'User',
+          chatId: data.chatId, type: data.type || 'video', status: data.status || 'missed', duration: data.duration || 0
+        });
+      }
+      
+      const effectiveChatId = callDoc?.chatId?.toString() || data.chatId;
+      if (effectiveChatId) {
+        const callType = callDoc?.type || data.type || 'voice';
+        const content = `Missed ${callType} call`;
+        const savedMessage = await chatService.createMessage({
+          chatId: effectiveChatId,
+          senderId: callDoc?.caller?.toString() || data.caller || '',
+          content,
+          messageType: 'call_summary'
+        });
+        io.to(effectiveChatId).emit('receive-message', savedMessage);
+      }
+      
+      const toId = data.to || (data.receiverModel === 'Group' ? data.chatId : data.receiver);
+      const receiverSocketId = userSocketMap.get(toId);
+      if (receiverSocketId) io.to(receiverSocketId).emit('call-cancelled');
+      console.log(`❌ Call [${data.callId || 'fallback'}] cancelled/missed`);
+    } catch (error: any) {
+      console.error("CRITICAL DB ERROR CANCELLING CALL:", error.message, error.errors);
+    }
+  });
+
+  // ✅ Call ended normally — persist duration
+  socket.on('end-call', async (data: any) => {
+    try {
+      let callDoc: any;
+      if (data.callId) {
+        callDoc = await Call.findByIdAndUpdate(data.callId, {
+          status: data.status || 'ended',
+          duration: data.duration || 0
+        }, { new: true });
+      } else if (data.caller && data.receiver && data.chatId) {
+        // Fallback creation
+        callDoc = await Call.create({
+          caller: data.caller, receiver: data.receiver, receiverModel: data.receiverModel || 'User',
+          chatId: data.chatId, type: data.type || 'video', status: data.status || 'ended', duration: data.duration || 0
+        });
+      }
+
+      const effectiveChatId = callDoc?.chatId?.toString() || data.chatId;
+
+      if (effectiveChatId) {
+        const duration = data.duration || callDoc?.duration || 0;
+        const min = Math.floor(duration / 60).toString().padStart(2, '0');
+        const sec = (duration % 60).toString().padStart(2, '0');
+        const callType = callDoc?.type || data.type || 'voice';
+        const content = `${callType.charAt(0).toUpperCase() + callType.slice(1)} call - ${min}:${sec}`;
+        
+        const savedMessage = await chatService.createMessage({
+          chatId: effectiveChatId,
+          senderId: callDoc?.caller?.toString() || data.caller || '',
+          content,
+          messageType: 'call_summary'
+        });
+        io.to(effectiveChatId).emit('receive-message', savedMessage);
+        console.log(`💬 [end-call] call_summary sent to room ${effectiveChatId}`);
+      } else {
+        console.log(`⚠️ [end-call] No chatId — call_summary skipped for call ${data.callId}`);
+      }
+      
+      const toId = data.to || (data.receiverModel === 'Group' ? data.chatId : data.receiver);
+      const receiverSocketId = userSocketMap.get(toId);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit('call-ended');
+      }
+      console.log(`📴 Call [${data.callId || 'fallback'}] ended — duration: ${data.duration}s`);
+    } catch (error: any) {
+      console.error("CRITICAL DB ERROR ENDING CALL:", error.message, error.errors);
+    }
+  });
+
+  // ==========================================
+  // 🎥 Group Calling (Mesh WebRTC)
+  // ==========================================
+
+  socket.on('start-group-call', async (data: { groupId: string, callerId: string, callerName: string, callType: 'video' | 'voice' }) => {
+    try {
+      const Chat = require('./models/chat').default;
+      const chat = await Chat.findById(data.groupId);
+      if (!chat) return;
+
+      const newCall = await Call.create({
+        caller: data.callerId,
+        receiver: data.groupId,
+        receiverModel: 'Group',
+        chatId: data.groupId,
+        type: data.callType || 'video', // ✅ Save actual type, NOT hardcoded 'group'
+        status: 'missed'
+      });
+
+      const callId = newCall._id.toString();
+      console.log(`📞 [start-group-call] Saved call with type=${newCall.type}, id=${callId}`);
+      
+      // ✅ CRITICAL: Send callId back to the CALLER so they can reference it on end-call
+      socket.emit('call-delivered', { callId });
+      
+      // Auto-join the caller to the room
+      socket.join(data.groupId);
+
+      // Notify all other members
+      chat.users.forEach((userId: any) => {
+        const idStr = userId.toString();
+        if (idStr !== data.callerId) {
+          const sId = userSocketMap.get(idStr);
+          if (sId) {
+            io.to(sId).emit('incoming-group-call', {
+              groupId: data.groupId,
+              callerName: data.callerName,
+              callType: data.callType,
+              callId: callId,
+            });
+          }
+        }
+      });
+      console.log(`🎥 Group call started in ${data.groupId} by ${data.callerName}`);
+    } catch (error) {
+      console.log("Error starting group call:", error);
+    }
+  });
+
+  socket.on('join-group-room', async (data: { groupId: string, isCaller?: boolean, callId?: string }) => {
+    // Return all socket IDs currently in this room (except the new joiner)
+    const room = io.sockets.adapter.rooms.get(data.groupId);
+    const usersInRoom = room ? Array.from(room).filter(id => id !== socket.id) : [];
+    
+    if (data.callId && !data.isCaller) {
+      await Call.findByIdAndUpdate(data.callId, { status: 'accepted' });
+    }
+
+    socket.emit('all-users-in-group', usersInRoom);
+    socket.join(data.groupId);
+  });
+
+  socket.on('sending-group-signal', (payload: { userToSignal: string, signal: any, callerID: string }) => {
+    // Send signal to specific peer so they can generate a return signal
+    io.to(payload.userToSignal).emit('user-joined-group', { signal: payload.signal, callerID: payload.callerID });
+  });
+
+  socket.on('returning-group-signal', (payload: { callerID: string, signal: any }) => {
+    // Send the return signal back to the initiator to complete handshake
+    io.to(payload.callerID).emit('receiving-returned-signal', { signal: payload.signal, id: socket.id });
+  });
+
+  socket.on('leave-group-room', (data: { groupId: string }) => {
+    socket.leave(data.groupId);
+    socket.to(data.groupId).emit('user-left-group', socket.id);
   });
 
   socket.on('disconnect', () => {

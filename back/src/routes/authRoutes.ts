@@ -2,7 +2,7 @@
 
 import { Router } from 'express';
 import passport from 'passport';
-import { login, register, googleAuthCallback, forgotPassword } from '../controllers/auth.controller';
+import { login, register, googleAuthCallback, forgotPassword, resetPassword } from '../controllers/auth.controller';
 import { registerValidator, loginValidator } from '../validators/authValidator';
 
 const router = Router();
@@ -10,6 +10,7 @@ const router = Router();
 router.post('/register', registerValidator, register);
 router.post('/login', loginValidator, login);
 router.post('/forgot-password', forgotPassword);
+router.post('/reset-password/:token', resetPassword);
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
 
 // ✅ التعديل النهائي الجاهز للفرونت إند

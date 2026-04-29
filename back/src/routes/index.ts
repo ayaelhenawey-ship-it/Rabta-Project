@@ -13,7 +13,8 @@ import { protect } from '../middlewares/auth.middleware';
 import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
 
-import { getMyProfile, updateMyProfile, getUserProfile, deleteMyAccount, searchUsers } from '../controllers/profile.controller';
+import { getMyProfile, updateMyProfile, getUserProfile, deleteMyAccount, searchUsers, getMyContacts, findByPhone, addConnection } from '../controllers/profile.controller';
+import { toggleBlockUser, sendFriendRequest } from '../controllers/chat.controller';
 
 import { uploadAvatar } from '../middlewares/upload.middleware';
 import { uploadProfileAvatar } from '../controllers/profile.controller';
@@ -91,7 +92,27 @@ router.post('/users/link-google', protect, catchAsync(async (req: Request, res: 
 
 // مسار البحث (بنحميه بـ protect عشان بس المسجلين في رابطة هما اللي يبحثوا)
 router.get('/users/search/all', protect, searchUsers);
-// مسار عشان اليوزر يشوف بروفايل أي حد تاني (مش محتاج حماية أو ممكن تحميه حسب رغبتكم)
+
+// Request Verification
+import { requestVerification, toggleSaveProject, toggleSaveFreelancer, getSavedItems, clearSavedItems } from '../controllers/profile.controller';
+router.put('/users/verify-request', protect, requestVerification);
+
+// Saved Items — MUST be above /users/:id to prevent wildcard capture
+router.get('/users/my-contacts', protect, getMyContacts);
+router.get('/users/find-by-phone', protect, findByPhone);
+router.post('/users/add-connection', protect, addConnection);
+router.get('/users/saved-items', protect, getSavedItems);
+router.delete('/users/saved-items/clear', protect, clearSavedItems);
+router.post('/users/toggle-save-project/:projectId', protect, toggleSaveProject);
+router.post('/users/toggle-save-freelancer/:freelancerId', protect, toggleSaveFreelancer);
+
+// Block / Unblock a user
+router.put('/users/block/:id', protect, toggleBlockUser);
+
+// Send friend request via phone number
+router.post('/users/friend-request', protect, sendFriendRequest);
+
+// مسار عشان اليوزر يشوف بروفايل أي حد تاني — wildcard MUST come last
 router.get('/users/:id', protect, getUserProfile);
 
 // المسارات الشخصية (لازم يكون عامل لوجين - نستخدم الميدل وير protect)

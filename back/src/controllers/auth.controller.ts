@@ -28,6 +28,15 @@ export const forgotPassword = catchAsync(async (req: Request, res: Response) => 
   });
 });
 
+export const resetPassword = catchAsync(async (req: Request, res: Response) => {
+  const { user, token } = await authService.resetPassword(req.params.token as string, req.body.password);
+  res.status(200).json({ 
+    status: 'success', 
+    message: 'Password updated successfully',
+    data: { user, token }
+  });
+});
+
 export const googleAuthCallback = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) return next(new AppError('Google login failed', 401));
   const user = req.user as any;

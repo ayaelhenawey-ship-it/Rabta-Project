@@ -74,13 +74,13 @@ export const getMyChats = catchAsync(async (req: Request, res: Response, next: N
 // ==========================================
 export const createGroup = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const adminId = (req.user as any)._id.toString();
-  const { groupName, members } = req.body;
+  const { groupName, members, isPrivate } = req.body;
 
   if (!groupName) {
     return next(new AppError('Group name is required', 400));
   }
 
-  const groupChat = await chatService.createGroupChat(adminId, groupName, members);
+  const groupChat = await chatService.createGroupChat(adminId, groupName, members, isPrivate);
 
   res.status(201).json({
     status: 'success',
@@ -271,12 +271,74 @@ export const sendMessage = catchAsync(async (req: Request, res: Response, next: 
     chatId: id,
     senderId,
     content,
-    messageType: type
+    messageType: type || 'text'
   });
+
+  // Retrieve io from Express app to avoid circular dependencies
+  const io = req.app.get('io');
+  // Emit the message in real-time to everyone in the chat room
+  io.to(id).emit('receive-message', message);
 
   res.status(201).json({
     status: 'success',
     data: { message }
+  });
+});
+
+export const sendAudioMessage = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const id = req.params.id as string;
+  const senderId = (req.user as any)._id.toString();
+
+  if (!req.file) {
+    return next(new AppError('Audio file is required', 400));
+  }
+
+  // Construct URL for the uploaded file
+  const audioUrl = `/uploads/audio/${req.file.filename}`;
+
+  const message = await chatService.createMessage({
+    chatId: id,
+    senderId,
+    content: audioUrl,
+    messageType: 'audio'
+  });
+
+  // Retrieve io from Express app
+  const io = req.app.get('io');
+  // Emit the message in real-time
+  io.to(id).emit('receive-message', message);
+
+  res.status(201).json({
+    status: 'success',
+    data: { message }
+  });
+});
+
+export const markMessagesAsRead = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params; // chatId
+  const userId = (req.user as any)._id.toString();
+
+  // Find all unread messages in this chat sent by the OTHER person
+  await require('../models/Message').default.updateMany(
+    { 
+      chatId: id, 
+      senderId: { $ne: userId },
+      status: { $ne: 'read' }
+    },
+    { 
+      $set: { status: 'read' },
+      $addToSet: { readBy: userId }
+    }
+  );
+
+  // Retrieve io from Express app
+  const io = req.app.get('io');
+  // Emit the event to the chat room to update UI instantly
+  io.to(id).emit('messages-read', { chatId: id, readBy: userId });
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Messages marked as read'
   });
 });
 
@@ -303,5 +365,91 @@ export const clearChatHistory = catchAsync(async (req: Request, res: Response, n
   res.status(200).json({
     status: 'success',
     message: 'Chat cleared successfully'
+  });
+});
+
+// ==========================================
+// 🚫 Block / Unblock a User
+// PUT /api/v1/users/block/:id
+// ==========================================
+export const toggleBlockUser = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { User } = require('../models/user');
+  const currentUserId = (req.user as any)._id.toString();
+  const targetUserId = req.params.id;
+
+  if (currentUserId === targetUserId) {
+    return next(new AppError('You cannot block yourself.', 400));
+  }
+
+  const currentUser = await User.findById(currentUserId);
+  if (!currentUser) return next(new AppError('User not found', 404));
+
+  const alreadyBlocked = currentUser.blockedUsers?.some(
+    (id: any) => id.toString() === targetUserId
+  );
+
+  if (alreadyBlocked) {
+    // Unblock
+    currentUser.blockedUsers = currentUser.blockedUsers.filter(
+      (id: any) => id.toString() !== targetUserId
+    );
+    await currentUser.save({ validateBeforeSave: false });
+    return res.status(200).json({ status: 'success', message: 'User unblocked.' });
+  } else {
+    // Block
+    currentUser.blockedUsers = [...(currentUser.blockedUsers || []), targetUserId];
+    await currentUser.save({ validateBeforeSave: false });
+    return res.status(200).json({ status: 'success', message: 'User blocked.' });
+  }
+});
+
+// ==========================================
+// 👥 Send Friend Request via Phone Number
+// POST /api/v1/users/friend-request
+// ==========================================
+export const sendFriendRequest = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { User } = require('../models/user');
+  const senderId = (req.user as any)._id.toString();
+  const { phoneNumber } = req.body;
+
+  if (!phoneNumber) return next(new AppError('Phone number is required.', 400));
+
+  const receiver = await User.findOne({ phoneNumber });
+  if (!receiver) return next(new AppError('No user found with that phone number.', 404));
+  if (receiver._id.toString() === senderId) return next(new AppError('You cannot send a request to yourself.', 400));
+
+  // Prevent duplicate pending requests
+  const alreadyPending = receiver.pendingRequests?.some(
+    (id: any) => id.toString() === senderId
+  );
+  if (alreadyPending) return next(new AppError('Friend request already sent.', 400));
+
+  // Prevent re-requesting an existing connection
+  const alreadyConnected = receiver.connections?.some(
+    (id: any) => id.toString() === senderId
+  );
+  if (alreadyConnected) return next(new AppError('You are already connected with this user.', 400));
+
+  // Add sender to receiver's pendingRequests
+  receiver.pendingRequests = [...(receiver.pendingRequests || []), senderId];
+  await receiver.save({ validateBeforeSave: false });
+
+  // Emit real-time notification via socket.io
+  const io = (req as any).app.get('io');
+  if (io) {
+    const senderUser = await User.findById(senderId).select('fullName avatar');
+    // The receiver's socket room is their userId string
+    io.to(receiver._id.toString()).emit('new_friend_request', {
+      from: {
+        _id: senderId,
+        fullName: senderUser?.fullName,
+        avatar: senderUser?.avatar
+      }
+    });
+  }
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Friend request sent successfully.'
   });
 });

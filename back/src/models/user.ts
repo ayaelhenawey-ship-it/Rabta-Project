@@ -10,6 +10,7 @@ export interface IUser extends Document {
   googleId?: string;
   role: 'freelancer' | 'employer';
   profileComplete: boolean;
+  isVerified: boolean;
   // Common fields
   jobTitle?: string;
   bioHeadline?: string;
@@ -20,6 +21,10 @@ export interface IUser extends Document {
   // Employer specific
   companyName?: string;
   industry?: string;
+  website?: string;
+  verificationLink?: string;
+  savedFreelancers?: mongoose.Types.ObjectId[];
+  connections?: mongoose.Types.ObjectId[];
   // Social & Professional
   socialLinks?: {
     github?: string;
@@ -46,7 +51,10 @@ export interface IUser extends Document {
       inAppSounds: boolean;
     };
   };
+  savedProjects?: mongoose.Types.ObjectId[];
   status: 'online' | 'offline' | 'busy';
+  resetPasswordToken?: string;
+  resetPasswordExpire?: Date;
   createdAt: Date;
   updatedAt: Date;
   comparePassword: (candidatePassword: string, userPassword: string) => Promise<boolean>;
@@ -100,6 +108,10 @@ const UserSchema: Schema = new Schema({
     type: Boolean,
     default: false
   },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
   jobTitle: {
     type: String,
     trim: true
@@ -134,6 +146,15 @@ const UserSchema: Schema = new Schema({
     type: String,
     trim: true
   },
+  website: {
+    type: String,
+    trim: true
+  },
+  verificationLink: {
+    type: String,
+    trim: true,
+    default: ""
+  },
   socialLinks: {
     github: { type: String, trim: true, default: "" },
     linkedin: { type: String, trim: true, default: "" },
@@ -158,6 +179,9 @@ const UserSchema: Schema = new Schema({
       inAppSounds: { type: Boolean, default: true }
     }
   },
+  savedProjects: [{ type: Schema.Types.ObjectId, ref: 'Job' }],
+  savedFreelancers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  connections: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   status: {
     type: String,
     enum: ['online', 'offline', 'busy'],
@@ -166,7 +190,11 @@ const UserSchema: Schema = new Schema({
   avatar: {
     type: String,
     default: ""
-  }
+  },
+  resetPasswordToken: String,
+  resetPasswordExpire: Date,
+  blockedUsers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  pendingRequests: [{ type: Schema.Types.ObjectId, ref: 'User' }]
 }, { timestamps: true });
 
 UserSchema.index({ fullName: 1 });

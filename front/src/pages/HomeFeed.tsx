@@ -17,6 +17,13 @@ export const HomeFeed = () => {
   
   // 2. State: التحكم في النوافذ المنبثقة
   const [showNewMessage, setShowNewMessage] = useState(false);
+  // Collapsible chat list (Telegram desktop style)
+  const [isChatListOpen, setIsChatListOpen] = useState(true);
+
+  // CRITICAL: Always force sidebar open if no chat is selected
+  useEffect(() => {
+    if (!activeChatId) setIsChatListOpen(true);
+  }, [activeChatId]);
 
   // 3. Effect: جلب قائمة المحادثات من الباك-إند
   useEffect(() => {
@@ -24,18 +31,33 @@ export const HomeFeed = () => {
       try {
         setIsLoadingChats(true);
         const response = await axiosInstance.get('/chats');
-        const formattedChats = response.data.data.chats.map((c: any) => ({
-          id: c._id,
-          name: c.groupName || (c.users.find((u: any) => u._id !== JSON.parse(localStorage.getItem('user') || '{}')._id)?.fullName) || 'Chat',
-          lastMessage: c.latestMessage?.content || 'No messages yet',
-          time: c.latestMessage?.createdAt ? new Date(c.latestMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-          avatar: c.groupName ? undefined : c.users.find((u: any) => u._id !== JSON.parse(localStorage.getItem('user') || '{}')._id)?.avatar,
-          initials: c.groupName ? c.groupName.substring(0, 2).toUpperCase() : c.users.find((u: any) => u._id !== JSON.parse(localStorage.getItem('user') || '{}')._id)?.fullName?.substring(0, 2).toUpperCase() || 'CH',
-          isOnline: false,
-          isGroup: c.isGroup,
-          groupMembers: c.isGroup ? c.users.map((u: any) => u.fullName) : []
-        }));
-        setChats(formattedChats);
+        const me = JSON.parse(localStorage.getItem('user') || '{}');
+        const myId = me._id || me.id;
+        const formattedChats = response.data.data.chats.map((c: any) => {
+          const otherUser = c.users.find((u: any) => (u._id || u.id) !== myId);
+          return {
+            id: c._id,
+            name: c.groupName || otherUser?.fullName || 'Chat',
+            lastMessage: c.latestMessage?.content || 'No messages yet',
+            time: c.latestMessage?.createdAt ? new Date(c.latestMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+            avatar: c.groupName ? undefined : otherUser?.avatar,
+            initials: c.groupName ? c.groupName.substring(0, 2).toUpperCase() : otherUser?.fullName?.substring(0, 2).toUpperCase() || 'CH',
+            isOnline: false,
+            isGroup: c.isGroup,
+            isPrivate: c.isPrivate,
+            admins: c.admins?.map((a: any) => typeof a === 'string' ? a : a._id),
+            groupMembers: c.isGroup ? c.users.map((u: any) => u.fullName) : [],
+            otherUserId: c.isGroup ? undefined : otherUser?._id,
+            otherUserAvatar: c.isGroup ? undefined : (otherUser?.avatar || ''),
+            unreadCount: c.unreadCount || 0,
+            lastMessageSender: c.latestMessage?.senderId?.fullName || '',
+            lastMessageStatus: c.latestMessage?.status || 'sent',
+            isMine: c.latestMessage ? (c.latestMessage.senderId?._id || c.latestMessage.senderId) === myId : false
+          };
+        });
+        // ✅ Safety: strictly exclude any group chats that leak through
+        const directChats = formattedChats.filter((c: any) => !c.isGroup);
+        setChats(directChats);
       } catch (error) {
         toast.error("Failed to load chats");
       } finally {
@@ -57,15 +79,30 @@ export const HomeFeed = () => {
     });
 
     const handleReceiveMessage = (message: any) => {
+      const currentUserId = JSON.parse(localStorage.getItem('user') || '{}')._id;
+      const isMine = (message.senderId?._id || message.senderId) === currentUserId;
+
+      // If we received a message from someone else, emit a delivered ACK
+      if (!isMine) {
+        socket.emit('message_delivered', { messageId: message._id, chatId: message.chatId });
+      }
+
       setChats(prevChats => {
         const chatIndex = prevChats.findIndex(c => c.id === message.chatId);
         if (chatIndex > -1) {
           const updatedChats = [...prevChats];
           const isAudio = message.messageType === 'audio' || (message.content && message.content.startsWith('blob:'));
+          // Increment unread count if the chat is not currently active
+          const isUnread = !isMine && message.chatId !== activeChatId;
+
           updatedChats[chatIndex] = {
             ...updatedChats[chatIndex],
             lastMessage: isAudio ? 'Voice note' : message.content,
-            time: new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            time: new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            unreadCount: (updatedChats[chatIndex].unreadCount || 0) + (isUnread ? 1 : 0),
+            isMine,
+            lastMessageSender: message.senderId?.fullName || '',
+            lastMessageStatus: 'sent'
           };
           
           // Move the updated chat to the top of the list
@@ -93,7 +130,13 @@ export const HomeFeed = () => {
       <ChatsList 
         chats={chats} 
         activeChatId={activeChatId} 
-        onSelectChat={setActiveChatId} 
+        onSelectChat={(id) => {
+          setActiveChatId(id);
+          // Mark as read when opened
+          setChats(prev => prev.map(c => c.id === id ? { ...c, unreadCount: 0 } : c));
+        }}
+        isChatListOpen={isChatListOpen}
+        onClose={() => setIsChatListOpen(false)}
       />
 
       {activeChatId && activeChat ? (
@@ -104,6 +147,12 @@ export const HomeFeed = () => {
           isGroup={activeChat.isGroup || false}
           messages={messages} 
           groupMembers={activeChat.groupMembers}
+          isPrivate={activeChat.isPrivate}
+          admins={activeChat.admins}
+          isChatListOpen={isChatListOpen}
+          onOpenChatList={() => setIsChatListOpen(true)}
+          otherUserId={(activeChat as any).otherUserId}
+          otherUserAvatar={(activeChat as any).otherUserAvatar}
         />
       ) : (
         <EmptyChatState onNewMessage={() => setShowNewMessage(true)} />

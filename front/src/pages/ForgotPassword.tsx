@@ -1,128 +1,113 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import toast from "react-hot-toast";
-import { Input } from "../components/ui/Input";
-
-const forgotSchema = z.object({
-  email: z.string().min(1, "Email is required").email("Invalid email format"),
-});
-
-type ForgotFormInputs = z.infer<typeof forgotSchema>;
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import axiosInstance from '../api/axiosInstance';
+import toast from 'react-hot-toast';
 
 export const ForgotPassword = () => {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<ForgotFormInputs>({
-    resolver: zodResolver(forgotSchema),
-  });
+  const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSent, setIsSent] = useState(false);
 
-  const onSubmit = (data: ForgotFormInputs) => {
-    console.log("Reset email sent to:", data.email);
-    toast.success("Reset link sent successfully!");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return toast.error('Please enter your email address');
+
+    try {
+      setIsLoading(true);
+      await axiosInstance.post('/auth/forgot-password', { email });
+      setIsSent(true);
+      toast.success('Reset link sent!');
+    } catch (error: any) {
+      // Don't leak if email exists or not usually, but let's show the error from backend
+      toast.error(error.response?.data?.message || 'Failed to send reset link');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] dark:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] transition-colors duration-300">
-      <header className="w-full py-4 px-6 shadow-sm bg-[#FFFFFF] dark:bg-[#262626] transition-colors duration-300">
-        <div className="flex items-center justify-between">
-          <Link
-            to="/login"
-            className="hover:opacity-80 transition-opacity text-[#7C3AED] dark:text-[#8B5CF6]"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M15 19l-7-7 7-7"
-              ></path>
-            </svg>
-          </Link>
-          <h1 className="text-xl font-bold tracking-tight">Forgot Password</h1>
-          <div className="w-6"></div>
-        </div>
-      </header>
-
-      <main className="flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          <div className="bg-[#FFFFFF] dark:bg-[#262626] rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-800 transition-colors duration-300">
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center bg-[#7C3AED]/10 dark:bg-[#8B5CF6]/10 text-[#7C3AED] dark:text-[#8B5CF6]">
-                <svg
-                  className="w-8 h-8"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-                  ></path>
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold mb-2">Reset Password</h2>
-              <p className="text-gray-500 dark:text-gray-400">
-                Enter your email and we'll send you a reset link
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-              <Input
-                label="Email Address"
-                id="email"
-                type="email"
-                placeholder="Enter your registered email"
-                {...register("email")}
-                error={errors.email?.message}
-              />
-              <div className="rounded-lg p-4 bg-[#7C3AED]/5 dark:bg-[#8B5CF6]/5 border border-[#7C3AED]/20 dark:border-[#8B5CF6]/20">
-                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                  We'll send a password reset link to your email. Please check
-                  your inbox and spam folder.
-                </p>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3 px-4 rounded-lg font-bold text-white bg-[#7C3AED] dark:bg-[#8B5CF6] hover:opacity-90 shadow-md transition-all disabled:opacity-50"
-              >
-                {isSubmitting ? "Sending..." : "Send Reset Link"}
-              </button>
-            </form>
-
-            <div className="mt-6 text-center space-y-3">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Remember your password?{" "}
-                <Link
-                  to="/login"
-                  className="font-bold text-[#7C3AED] dark:text-[#8B5CF6] hover:underline"
-                >
-                  Log In
-                </Link>
-              </p>
-              <p className="text-xs text-gray-400">
-                Need help?{" "}
-                <a href="#" className="underline hover:text-[#7C3AED]">
-                  Contact Support
-                </a>
-              </p>
-            </div>
+    <div className="min-h-screen bg-[#FAFAFA] dark:bg-[#121212] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="flex justify-center mb-6">
+          <div className="w-12 h-12 bg-[#7C3AED] rounded-xl flex items-center justify-center transform rotate-12">
+            <span className="material-icons-round text-white text-2xl -rotate-12">lock_reset</span>
           </div>
         </div>
-      </main>
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-[#171717] dark:text-[#F5F5F5]">
+          Reset your password
+        </h2>
+        <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+          Or{' '}
+          <Link to="/login" className="font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors">
+            return to login
+          </Link>
+        </p>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white dark:bg-[#1E1E1E] py-8 px-4 shadow sm:rounded-2xl sm:px-10 border border-gray-100 dark:border-white/5">
+          {isSent ? (
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
+                <span className="material-icons-round text-green-600 dark:text-green-400">mark_email_read</span>
+              </div>
+              <h3 className="text-lg font-medium text-[#171717] dark:text-[#F5F5F5] mb-2">Check your email</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                If an account exists for <span className="font-bold text-[#171717] dark:text-white">{email}</span>, a reset link has been sent to your email.
+              </p>
+              <button
+                onClick={() => setIsSent(false)}
+                className="text-[#7C3AED] text-sm font-bold hover:underline"
+              >
+                Try another email
+              </button>
+            </div>
+          ) : (
+            <form className="space-y-6" onSubmit={handleSubmit}>
+              <div>
+                <label htmlFor="email" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                  Email address
+                </label>
+                <div className="mt-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="material-icons-round text-gray-400 text-[20px]">email</span>
+                  </div>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="appearance-none block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-[#7C3AED] focus:border-[#7C3AED] sm:text-sm bg-white dark:bg-[#262626] text-[#171717] dark:text-[#F5F5F5]"
+                    placeholder="you@example.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-[#7C3AED] hover:bg-[#6D28D9] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#7C3AED] disabled:opacity-70 disabled:cursor-not-allowed transition-all"
+                >
+                  {isLoading ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Sending...
+                    </div>
+                  ) : (
+                    'Send Reset Link'
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
+
+export default ForgotPassword;

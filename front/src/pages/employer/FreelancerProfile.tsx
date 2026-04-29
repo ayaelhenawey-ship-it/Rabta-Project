@@ -2,12 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axiosInstance from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
+import { useAppSelector, useAppDispatch } from '../../store/hooks';
+import { updateProfile } from '../../store/slices/authSlice';
 
 const FreelancerProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const { user } = useAppSelector(state => state.auth);
   const [profile, setProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Check if current profile is already saved by this employer
+  const isSaved = user?.savedFreelancers?.includes(id);
+
+  const handleSaveCandidate = async () => {
+    try {
+      setIsSaving(true);
+      const res = await axiosInstance.post(`/users/toggle-save-freelancer/${id}`);
+      // Update local user state in Redux
+      dispatch(updateProfile(res.data.data.user));
+      toast.success(res.data.message);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to save candidate.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -84,6 +106,17 @@ const FreelancerProfile: React.FC = () => {
                   <span className="material-icons-round text-sm">download</span>
                   Resume
                 </a>
+              )}
+              {/* Only Employers can save candidates */}
+              {user?.role === 'employer' && (
+                <button 
+                  onClick={handleSaveCandidate}
+                  disabled={isSaving}
+                  className={`px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 disabled:opacity-50 ${isSaved ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-gray-100 dark:bg-[#1f1f1f] text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#2a2a2a]'}`}
+                >
+                  <span className="material-icons-round text-sm">{isSaved ? 'bookmark' : 'bookmark_border'}</span>
+                  {isSaved ? 'Saved' : 'Save Candidate'}
+                </button>
               )}
             </div>
           </div>

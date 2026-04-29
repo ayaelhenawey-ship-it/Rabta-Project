@@ -22,6 +22,7 @@ export const createMessage = async (data: {
   senderId: string;
   content: string;
   messageType?: string;
+  attachments?: { fileUrl: string; fileType: string; fileSize?: number }[];
 }) => {
   // التأكد إن الشات موجود فعلاً
   const chat = await Chat.findById(data.chatId);
@@ -41,6 +42,7 @@ export const createMessage = async (data: {
     senderId: data.senderId,
     content: data.content,
     messageType: data.messageType || 'text',
+    attachments: data.attachments,
     signal
   });
 
@@ -82,21 +84,19 @@ export const getChatMessages = async (
   // بناء الـ query
   const query: any = { chatId };
 
-  // لو فيه cursor (يعني اليوزر عايز رسائل أقدم)، بنجيب اللي قبل الـ ID ده
+  // Cursor-based pagination: load messages AFTER the given ID (ascending order)
   if (before) {
     query._id = { $lt: new mongoose.Types.ObjectId(before) };
   }
 
-  // الحد الأقصى 50 رسالة والأدنى 20 عشان نحمي السيرفر
   const safeLimit = Math.min(Math.max(limit, 20), 50);
 
   const messages = await Message.find(query)
     .populate('senderId', 'fullName avatar')
-    .sort({ createdAt: -1 }) // الأحدث الأول
+    .sort({ createdAt: 1 }) // ✅ Ascending: oldest first, newest last — correct chronological order
     .limit(safeLimit);
 
-  // بنقلب الترتيب عشان الفرونت إند يعرضهم من الأقدم للأحدث
-  return messages.reverse();
+  return messages; // ✅ No .reverse() needed — sort is already chronological
 };
 
 // ==========================================
@@ -130,7 +130,8 @@ export const accessOrCreateChat = async (currentUserId: string, otherUserId: str
 export const createGroupChat = async (
   adminId: string,
   groupName: string,
-  memberIds: string[]
+  memberIds: string[],
+  isPrivate: boolean = false
 ) => {
   // لازم يكون فيه على الأقل عضوين غير الأدمن
   if (!memberIds || memberIds.length < 2) {
@@ -144,7 +145,8 @@ export const createGroupChat = async (
     isGroup: true,
     groupName,
     users: allUsers,
-    admins: [adminId]
+    admins: [adminId],
+    isPrivate
   });
 
   const populatedChat = await Chat.findById(groupChat._id)
@@ -461,13 +463,25 @@ export const getCommunityById = async (communityId: string) => {
 // 📋 جلب محادثات اليوزر (كل الشاتات اللي هو عضو فيها)
 // ==========================================
 export const getUserChats = async (userId: string) => {
-  const chats = await Chat.find({ users: userId })
+  const chats = await Chat.find({ users: userId, isGroup: false }) // ✅ Strictly 1-to-1 only
     .populate('users', 'fullName avatar status')
-    .populate('latestMessage')
+    .populate({
+      path: 'latestMessage',
+      populate: { path: 'senderId', select: 'fullName _id' }
+    })
     .populate('admins', 'fullName avatar')
-    .sort('-updatedAt'); // أحدث محادثة نشطة فوق
+    .sort('-updatedAt');
 
-  return chats;
+  const chatsWithUnread = await Promise.all(chats.map(async (chat) => {
+    const unreadCount = await Message.countDocuments({
+      chatId: chat._id,
+      senderId: { $ne: userId },
+      status: { $ne: 'read' }
+    });
+    return { ...chat.toObject(), unreadCount };
+  }));
+
+  return chatsWithUnread;
 };
 
 export const getSharedContent = async (chatId: string) => {

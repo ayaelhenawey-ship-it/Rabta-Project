@@ -180,12 +180,6 @@ export const Settings = () => {
             </div>
           </div>
 
-          <div className="mt-8">
-            <p className="text-center text-[10px] text-gray-400 uppercase tracking-widest">
-              Rabta for ITI Community • Version 1.0.0
-            </p>
-          </div>
-
           {/* Logout Button */}
           <div 
             className="flex items-center gap-4 p-4 mt-6 mb-8 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/30 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
@@ -199,6 +193,11 @@ export const Settings = () => {
               <p className="text-xs text-red-500/80 dark:text-red-400/70">Sign out of your account securely</p>
             </div>
           </div>
+
+          {/* App version — subtle footer beneath logout */}
+          <p className="text-xs text-gray-500 text-center mt-6 w-full mb-8">
+            Rabta for ITI Community • Version 1.0.0
+          </p>
 
         </div>
       </div>

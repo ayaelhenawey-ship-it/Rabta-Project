@@ -1,34 +1,36 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axios, { type AxiosResponse } from 'axios';
+import type { AxiosResponse } from 'axios';
 import axiosInstance from '../api/axiosInstance';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../store/store';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { useCall } from '../context/CallContext';
 
 // ==========================================
 // 1. Interfaces (Strictly Defined)
 // ==========================================
 export interface User {
   _id: string;
-  fullName: string;
+  fullName?: string;
+  groupName?: string;
   avatar?: string;
+  profilePic?: string;
   role?: string;
 }
 
 export interface CallRecord {
   _id: string;
   caller: User;
-  receiver: User;
-  type: 'voice' | 'video' | 'group';
-  status: 'missed' | 'accepted' | 'ended';
-  duration?: string;
+  receiver?: User;
+  receiverModel?: 'User' | 'Group';
+  chatId?: any;
+  type: 'voice' | 'video';
+  status: 'missed' | 'accepted' | 'ended' | 'rejected';
+  duration?: number;
   createdAt: string;
 }
 
-interface ApiResponse {
-  status: string;
-  results: number;
-  data: CallRecord[];
-}
 
 
 
@@ -40,19 +42,45 @@ export const CallsPage: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<'All' | 'Missed' | 'Meetings'>('All');
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
   const [showAiPopup, setShowAiPopup] = useState<boolean>(false);
-
-  // 💡 Get real user ID from Redux
-  const { user } = useSelector((state: RootState) => state.auth);
+  const user = useSelector((state: RootState) => state.auth.user);
   const myUserId = user?._id || user?.id; 
+  const navigate = useNavigate();
+  const { callUser, callGroup } = useCall();
 
-  // --- Functions ---
-  const getOtherUser = useCallback((call: CallRecord): User => {
-    const other = call.caller._id === myUserId ? call.receiver : call.caller;
-    return other;
+  // --- Helper: get the other party from a call record ---
+  const getOtherUser = useCallback((call: any): any => {
+    // For group calls, pull data from chatId (populated Chat document)
+    if (call.type === 'group' || call.chatId?.isGroup) {
+      return {
+        _id: call.chatId?._id || call.chatId,
+        isGroup: true,
+        fullName: call.chatId?.groupName || 'Group Call',
+        avatar: call.chatId?.groupAvatar || '',
+        jobTitle: `${call.chatId?.users?.length || 0} participants`
+      };
+    }
+
+    // CRITICAL: Compare as strings — Mongoose ObjectIds are objects, not strings
+    const isOutgoing = String(call.caller?._id) === String(myUserId);
+    const displayParty = isOutgoing ? call.receiver : call.caller;
+
+    const displayName = displayParty?.fullName
+      || displayParty?.groupName
+      || 'Unknown User';
+    const displayAvatar = displayParty?.avatar || displayParty?.profilePic || '';
+
+    return {
+      _id: displayParty?._id,
+      isGroup: false,
+      fullName: displayName,
+      avatar: displayAvatar,
+      jobTitle: displayParty?.role || 'Professional'
+    };
   }, [myUserId]);
 
-  const getCallDirection = (call: CallRecord): 'incoming' | 'outgoing' => {
-    return call.caller._id === myUserId ? 'outgoing' : 'incoming';
+  const getCallDirection = (call: any): 'incoming' | 'outgoing' => {
+    // Same string coercion fix here
+    return String(call.caller?._id) === String(myUserId) ? 'outgoing' : 'incoming';
   };
 
   // --- API Fetch ---
@@ -76,10 +104,8 @@ export const CallsPage: React.FC = () => {
       }
     };
 
-    if (myUserId) {
-      fetchHistory();
-    }
-  }, [myUserId]);
+    fetchHistory();
+  }, []);
 
   // --- Filtering Logic ---
   const filteredCalls = calls.filter((call) => {
@@ -87,9 +113,9 @@ export const CallsPage: React.FC = () => {
     const matchesFilter = 
       activeFilter === 'All' || 
       (activeFilter === 'Missed' && call.status === 'missed') || 
-      (activeFilter === 'Meetings' && call.type === 'group');
+      (activeFilter === 'Meetings' && !!call.chatId?.isGroup);
 
-    const matchesSearch = otherUser.fullName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (otherUser?.fullName || '').toLowerCase().includes(searchQuery.toLowerCase());
 
     return matchesFilter && matchesSearch;
   });
@@ -97,21 +123,36 @@ export const CallsPage: React.FC = () => {
   const selectedCall = calls.find((c) => c._id === selectedCallId);
   const selectedOtherUser = selectedCall ? getOtherUser(selectedCall) : null;
 
+  const handleDeleteCall = async () => {
+    if (!selectedCallId) return;
+    try {
+      await axiosInstance.delete(`/calls/${selectedCallId}`);
+      setCalls((prev) => prev.filter((c) => c._id !== selectedCallId));
+      toast.success('Call log deleted');
+      if (calls.length > 0) {
+        setSelectedCallId(calls[0]._id === selectedCallId ? calls[1]?._id : calls[0]._id);
+      }
+    } catch (err) {
+      toast.error('Failed to delete call log');
+    }
+  };
+
+  const handleOpenChat = () => {
+    if (!selectedCall) return;
+    if (selectedCall.chatId?.isGroup) {
+      navigate(`/groups/${selectedCall.chatId?._id || selectedCall.chatId}`);
+    } else {
+      navigate('/chats'); // Note: For exact 1-to-1 routing, Rabta might need /chats to handle specific IDs if supported.
+    }
+  };
+
   return (
     <div className="flex-1 flex h-full overflow-hidden bg-[#FAFAFA] dark:bg-[#171717] transition-colors duration-300">
       
       {/* 1. Calls Sidebar */}
       <aside className="w-[300px] bg-white dark:bg-[#262626] border-r border-gray-100 dark:border-gray-800 flex flex-col shrink-0">
-        <div className="p-4 flex items-center justify-between">
+        <div className="p-4">
           <h2 className="text-xl font-bold text-[#171717] dark:text-[#F5F5F5]">Calls</h2>
-          <div className="flex items-center gap-1">
-            <button className="w-9 h-9 flex items-center justify-center rounded-full text-gray-400 hover:text-[#7C3AED] dark:hover:text-[#8B5CF6] hover:bg-[#7C3AED]/10 dark:hover:bg-[#8B5CF6]/10 transition-all duration-200" title="New Call">
-              <span className="material-icons-round text-[20px]">add</span>
-            </button>
-            <button className="w-9 h-9 flex items-center justify-center rounded-full text-gray-400 hover:text-[#7C3AED] dark:hover:text-[#8B5CF6] hover:bg-[#7C3AED]/10 dark:hover:bg-[#8B5CF6]/10 transition-all duration-200" title="Quick Dial">
-              <span className="material-icons-round text-[20px]">call</span>
-            </button>
-          </div>
         </div>
 
         <div className="px-4 mb-3">
@@ -158,14 +199,21 @@ export const CallsPage: React.FC = () => {
             const isSelected = selectedCallId === call._id;
 
             return (
-              <div 
+              <div
                 key={call._id}
                 onClick={() => setSelectedCallId(call._id)}
                 className={`px-4 py-3 flex items-center gap-3 border-l-4 cursor-pointer transition-all ${
                   isSelected ? 'border-[#7C3AED] bg-[#7C3AED]/5 dark:bg-[#8B5CF6]/10' : 'border-transparent hover:bg-gray-50 dark:hover:bg-white/5'
                 }`}
               >
-                <img src={other.avatar || '/default-avatar.png'} className="w-12 h-12 rounded-full object-cover" alt={other.fullName} />
+                <div className="relative shrink-0">
+                  <img src={other.avatar || '/default-avatar.png'} className="w-12 h-12 rounded-full object-cover" alt={other.fullName} />
+                  <span className={`material-icons-round absolute -bottom-1 -right-1 text-[14px] w-5 h-5 flex items-center justify-center rounded-full text-white ${
+                    call.status === 'missed' ? 'bg-red-500' : 'bg-[#7C3AED]'
+                  }`}>
+                    {call.type === 'video' ? 'videocam' : 'call'}
+                  </span>
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline">
                     <h4 className={`font-bold text-sm truncate ${call.status === 'missed' && direction === 'incoming' && !isSelected ? 'text-red-500' : ''}`}>
@@ -173,7 +221,10 @@ export const CallsPage: React.FC = () => {
                     </h4>
                     <span className="text-[10px] text-gray-400">{new Date(call.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                   </div>
-                  <p className="text-xs text-gray-500 truncate">{call.type} call • {call.status}</p>
+                  <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                    <span className="material-icons-round text-[11px]">{direction === 'outgoing' ? 'call_made' : call.status === 'missed' ? 'call_missed' : 'call_received'}</span>
+                    {call.type === 'video' ? 'Video' : 'Voice'} call • {call.status}
+                  </p>
                 </div>
               </div>
             );
@@ -188,8 +239,7 @@ export const CallsPage: React.FC = () => {
             <header className="p-4 md:p-6 bg-white dark:bg-[#262626] border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
               <h2 className="text-lg font-bold">Call Info</h2>
               <div className="flex gap-2">
-                <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-[#7C3AED] dark:hover:text-[#8B5CF6] hover:bg-gray-50 dark:hover:bg-white/5 transition-all"><span className="material-icons-round text-[20px]">chat</span></button>
-                <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all"><span className="material-icons-round text-[20px]">delete_outline</span></button>
+                <button onClick={handleDeleteCall} className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all"><span className="material-icons-round text-[20px]">delete_outline</span></button>
               </div>
             </header>
 
@@ -199,17 +249,41 @@ export const CallsPage: React.FC = () => {
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">{selectedOtherUser.role || 'Professional'}</p>
               
               <div className="flex gap-6">
-                <button className="flex flex-col items-center gap-2 group">
+                <button 
+                  onClick={() => {
+                    if (selectedOtherUser.isGroup) {
+                      callGroup(selectedOtherUser._id, selectedOtherUser.fullName, 'voice');
+                    } else {
+                      callUser(selectedOtherUser._id, selectedOtherUser.fullName, 'voice', selectedOtherUser.avatar);
+                    }
+                  }}
+                  className="flex flex-col items-center gap-2 group"
+                >
                   <div className="w-14 h-14 rounded-full bg-[#7C3AED]/10 dark:bg-[#8B5CF6]/20 text-[#7C3AED] dark:text-[#8B5CF6] flex items-center justify-center group-hover:bg-[#7C3AED] group-hover:text-white transition-all shadow-sm">
                     <span className="material-icons-round text-[24px]">call</span>
                   </div>
                   <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">Voice</span>
                 </button>
-                <button className="flex flex-col items-center gap-2 group">
+                <button 
+                  onClick={() => {
+                    if (selectedOtherUser.isGroup) {
+                      callGroup(selectedOtherUser._id, selectedOtherUser.fullName, 'video');
+                    } else {
+                      callUser(selectedOtherUser._id, selectedOtherUser.fullName, 'video', selectedOtherUser.avatar);
+                    }
+                  }}
+                  className="flex flex-col items-center gap-2 group"
+                >
                   <div className="w-14 h-14 rounded-full bg-[#7C3AED]/10 dark:bg-[#8B5CF6]/20 text-[#7C3AED] dark:text-[#8B5CF6] flex items-center justify-center group-hover:bg-[#7C3AED] group-hover:text-white transition-all shadow-sm">
                     <span className="material-icons-round text-[24px]">videocam</span>
                   </div>
                   <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">Video</span>
+                </button>
+                <button onClick={handleOpenChat} className="flex flex-col items-center gap-2 group">
+                  <div className="w-14 h-14 rounded-full bg-[#7C3AED]/10 dark:bg-[#8B5CF6]/20 text-[#7C3AED] dark:text-[#8B5CF6] flex items-center justify-center group-hover:bg-[#7C3AED] group-hover:text-white transition-all shadow-sm">
+                    <span className="material-icons-round text-[24px]">chat_bubble_outline</span>
+                  </div>
+                  <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">Chat</span>
                 </button>
               </div>
             </div>

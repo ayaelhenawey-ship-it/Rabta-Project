@@ -6,6 +6,7 @@ import { LoginSuccess } from "./pages/LoginSuccess";
 import { Signup } from "./pages/Signup";
 import { Settings } from "./pages/Settings";
 import { ForgotPassword } from "./pages/ForgotPassword";
+import { ResetPassword } from "./pages/ResetPassword";
 import { MainLayout } from "./components/layout/MainLayout";
 import { HomeFeed } from "./pages/HomeFeed";
 import { GroupsFeed } from "./pages/GroupsFeed";
@@ -51,6 +52,8 @@ function App() {
 
       {/* صفحة الـ Login والـ Signup */}
       <Route path="/login-success" element={<LoginSuccess />} />
+      {/* Fully public — must work even when logged in (e.g. from reset email link) */}
+      <Route path="/reset-password/:token" element={<ResetPassword />} />
       <Route element={<PublicRoute />}>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />

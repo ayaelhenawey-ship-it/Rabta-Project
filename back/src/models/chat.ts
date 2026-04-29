@@ -7,6 +7,7 @@ export interface IChat extends Document {
   groupName?: string;
   groupAvatar?: string;
   admins?: mongoose.Types.ObjectId[];
+  isPrivate: boolean;
   latestMessage?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -19,6 +20,7 @@ const ChatSchema: Schema = new Schema({
   groupName: { type: String },
   groupAvatar: { type: String },
   admins: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  isPrivate: { type: Boolean, default: false },
   latestMessage: { type: Schema.Types.ObjectId, ref: 'Message' }
 }, { timestamps: true });
 

@@ -6,12 +6,14 @@ export interface JobsState {
   items: any[];
   loading: boolean;
   error: string | null;
+  filters: any;
 }
 
 const initialState: JobsState = {
   items: [],
   loading: false,
   error: null,
+  filters: {},
 };
 
 /**
@@ -19,12 +21,13 @@ const initialState: JobsState = {
  */
 export const fetchJobs = createAsyncThunk(
   'jobs/fetchJobs',
-  async (_, { rejectWithValue }) => {
+  async (params: { search?: string; types?: string; experience?: string; budget?: string; sort?: string; page?: number } | undefined, { rejectWithValue }) => {
     try {
-      const response = await axiosInstance.get('/jobs');
+      const response = await axiosInstance.get('/jobs', { params });
       return response.data;
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Failed to fetch jobs';
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      const errorMessage = err.response?.data?.message || 'Failed to fetch jobs';
       return rejectWithValue(errorMessage);
     }
   }
@@ -44,6 +47,12 @@ const jobsSlice = createSlice({
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
+    },
+    setFilters: (state, action: PayloadAction<any>) => {
+      state.filters = action.payload;
+    },
+    resetFilters: (state) => {
+      state.filters = {};
     },
   },
   extraReducers: (builder) => {
@@ -67,5 +76,5 @@ const jobsSlice = createSlice({
   },
 });
 
-export const { setJobs, setLoading, setError } = jobsSlice.actions;
+export const { setJobs, setLoading, setError, setFilters, resetFilters } = jobsSlice.actions;
 export default jobsSlice.reducer;

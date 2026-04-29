@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import Job from '../models/Job';
 import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
+import * as chatService from '../services/chat.service';
 
 export const listJobs = catchAsync(async (req: Request, res: Response) => {
   const { search, types, experience, budget, sort, page = 1 } = req.query;
@@ -12,7 +13,8 @@ export const listJobs = catchAsync(async (req: Request, res: Response) => {
   if (search) {
     filter.$or = [
       { title: { $regex: search, $options: 'i' } },
-      { description: { $regex: search, $options: 'i' } }
+      { description: { $regex: search, $options: 'i' } },
+      { requiredSkills: { $regex: search, $options: 'i' } }
     ];
   }
   
@@ -67,34 +69,88 @@ export const listJobs = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getJobDetail = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const userId = (req.user as any)?._id;
   const job = await Job.findById(req.params.id).populate('publisherId', 'fullName avatar companyName industry location');
   if (!job) return next(new AppError('Job not found', 404));
 
   const matchPercentage = Math.floor(Math.random() * 40) + 60;
 
+  // Dynamically compute hasApplied so the frontend can disable the Apply button immediately
+  const hasApplied = userId
+    ? job.applicants?.some(a => a.userId.toString() === userId.toString()) ?? false
+    : false;
+
   res.status(200).json({
     status: 'success',
-    data: { job, matchPercentage }
+    data: { job, matchPercentage, hasApplied }
   });
 });
 
 export const applyToJob = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const { proposal, skills } = req.body;
+  const { proposal, skills, note } = req.body;
+  const currentUserId = (req.user as any)._id;
   const job = await Job.findById(req.params.id);
+  
   if (!job) return next(new AppError('Job not found', 404));
 
+  // ✅ DUPLICATE CHECK: Prevent applying more than once
+  const alreadyApplied = job.applicants?.some(
+    a => a.userId.toString() === currentUserId.toString()
+  );
+  if (alreadyApplied) {
+    return next(new AppError('You have already applied for this job.', 400));
+  }
+
   job.applicants?.push({
-    userId: (req.user as any)._id,
-    proposal: proposal || '',
+    userId: currentUserId,
+    proposal: note || proposal || '',
     status: 'pending',
     appliedAt: new Date()
   });
 
   await job.save();
 
+  // 1. Trigger "Access Chat" logic between Applicant and Job Owner
+  const chat = await chatService.accessOrCreateChat(
+    currentUserId.toString(),
+    job.publisherId.toString()
+  );
+
+  if (!chat) {
+    return next(new AppError('Failed to initialize chat with the employer.', 500));
+  }
+
+  // 2. Prepare Auto-Message and Attachments
+  const messageText = `Hello, I am applying for ${job.title}. Please find my attached CV and notes.\n\nNotes: ${note || proposal || 'No additional notes provided.'}`;
+  
+  const attachments: { fileUrl: string; fileType: string; fileSize?: number }[] = [];
+  if (req.file) {
+    attachments.push({
+      fileUrl: `/uploads/documents/${req.file.filename}`,
+      fileType: req.file.mimetype,
+      fileSize: req.file.size
+    });
+  }
+
+  // 3. Send System-Generated Message
+  const message = await chatService.createMessage({
+    chatId: chat._id.toString(),
+    senderId: currentUserId.toString(),
+    content: messageText,
+    messageType: req.file ? 'file' : 'text',
+    attachments
+  });
+
+  // 4. Emit socket event
+  const io = req.app.get('io');
+  if (io) {
+    io.to(chat._id.toString()).emit('receive-message', message);
+  }
+
   res.status(200).json({
     status: 'success',
-    message: 'Applied successfully'
+    message: 'Application submitted and sent to the employer via chat.',
+    data: { message }
   });
 });
 

@@ -9,9 +9,12 @@ import {
   removeFromGroup,
   leaveGroupChat,
   sendMessage,
+  sendAudioMessage,
+  markMessagesAsRead,
   getSharedContent,
   clearChatHistory
 } from '../controllers/chat.controller';
+import { uploadAudio } from '../middlewares/upload.middleware';
 
 const router = Router();
 
@@ -29,8 +32,14 @@ router.get('/', getMyChats);
 // إنشاء أو فتح محادثة فردية مع يوزر تاني
 router.post('/', accessChat);
 
-// إرسال رسالة لشات معين
+// إرسال رسالة نصية لشات معين
 router.post('/:id/send', sendMessage);
+
+// إرسال رسالة صوتية لشات معين
+router.post('/:id/audio', uploadAudio.single('audio'), sendAudioMessage);
+
+// تحديد الرسائل كمقروءة
+router.put('/:id/read', markMessagesAsRead);
 
 // جلب المحتوى المشارك في شات معين
 router.get('/:id/shared', getSharedContent);

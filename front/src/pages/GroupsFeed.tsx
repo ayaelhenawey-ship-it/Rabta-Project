@@ -13,6 +13,7 @@ interface Community {
   tags: string[];
   members: string[] | any[];
   chatId?: any;
+  unreadCount?: number;
 }
 
 export const GroupsFeed = () => {
@@ -23,7 +24,17 @@ export const GroupsFeed = () => {
   const [communities, setCommunities] = useState<Community[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [isSideBarOpen, setIsSideBarOpen] = useState(true);
   const navigate = useNavigate();
+
+  // Derived: only allow collapsing when a group is actually selected
+  const isChatSelected = !!activeGroupId;
+
+  // If no chat is selected, always force the sidebar open so the user
+  // can't end up staring at an empty screen with no list visible.
+  useEffect(() => {
+    if (!isChatSelected) setIsSideBarOpen(true);
+  }, [isChatSelected]);
   
   const filters = ["All", "Programming", "UI/UX", "Data", "Cyber", "Cloud"];
 
@@ -46,21 +57,36 @@ export const GroupsFeed = () => {
   return (
     <div className="flex w-full h-full bg-[#FAFAFA] dark:bg-[#171717]">
       {/* عمود المجتمعات (Communities List) */}
-      <aside className="w-[320px] bg-[#FAFAFA] dark:bg-[#171717] flex flex-col h-full border-r border-gray-200 dark:border-gray-800 transition-colors duration-300 z-40 relative min-h-0 shrink-0">
+      <aside className={`flex flex-col h-full bg-[#FAFAFA] dark:bg-[#171717] transition-all duration-300 ease-in-out z-40 relative min-h-0 shrink-0 ${
+        isSideBarOpen
+          ? 'w-80 md:w-96 opacity-100 border-r border-gray-200 dark:border-gray-800'
+          : 'w-0 opacity-0 overflow-hidden border-none px-0 mx-0'
+      }`}>
         <div className="p-4 flex flex-col gap-4 shrink-0">
           
           <div className="flex items-center justify-between text-[#171717] dark:text-[#F5F5F5]">
             <span className="text-xl font-bold tracking-tight">
               Groups
             </span>
-            <button 
-              onClick={() => navigate('/create-group')}
-              className="flex items-center justify-center gap-1 bg-[#7C3AED] hover:bg-[#6D28D9] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95"
-              title="Create New Group"
-            >
-              <span className="material-icons-round text-sm">add</span>
-              Create
-            </button>
+            {/* Hamburger close button — only visible when a chat is selected */}
+            {isChatSelected ? (
+              <button
+                onClick={() => setIsSideBarOpen(false)}
+                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400"
+                title="Collapse group list"
+              >
+                <span className="material-icons">menu</span>
+              </button>
+            ) : (
+              <button 
+                onClick={() => navigate('/create-group')}
+                className="flex items-center justify-center gap-1 bg-[#7C3AED] hover:bg-[#6D28D9] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95"
+                title="Create New Group"
+              >
+                <span className="material-icons-round text-sm">add</span>
+                Create
+              </button>
+            )}
           </div>
 
           <div className="relative group">
@@ -106,7 +132,11 @@ export const GroupsFeed = () => {
             communities.map((community) => (
               <div 
                 key={community._id}
-                onClick={() => setActiveGroupId(community._id)}
+                onClick={() => {
+                  setActiveGroupId(community._id);
+                  // Mark as read locally
+                  setCommunities(prev => prev.map(c => c._id === community._id ? { ...c, unreadCount: 0 } : c));
+                }}
                 className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-gray-100 dark:border-gray-800 ${
                   activeGroupId === community._id 
                     ? "bg-gray-100 dark:bg-gray-800/80 border-l-4 border-l-[#7C3AED]" 
@@ -122,14 +152,19 @@ export const GroupsFeed = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline">
-                    <h3 className="text-[#171717] dark:text-[#F5F5F5] font-semibold text-sm truncate">
+                    <h3 className={`text-sm truncate ${community.unreadCount ? 'font-bold text-[#171717] dark:text-[#F5F5F5]' : 'font-semibold text-[#171717] dark:text-[#F5F5F5]'}`}>
                       {community.name}
                     </h3>
                   </div>
-                  <p className="text-gray-500 dark:text-gray-400 text-xs truncate">
-                    {community.description}
+                  <p className={`text-xs truncate ${community.unreadCount ? 'font-bold text-[#171717] dark:text-[#F5F5F5]' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {community.chatId?.latestMessage ? `${community.chatId.latestMessage.senderId?.fullName?.split(' ')[0]}: ${community.chatId.latestMessage.content}` : community.description}
                   </p>
                 </div>
+                {!!community.unreadCount && (
+                  <div className="w-5 h-5 bg-[#10B981] text-white text-[10px] font-bold flex items-center justify-center rounded-full shrink-0">
+                    {community.unreadCount}
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -196,6 +231,8 @@ export const GroupsFeed = () => {
               isGroup={true}
               messages={[]} 
               groupMembers={activeCommunity?.members?.map((m: any) => m.fullName || '')}
+              isChatListOpen={isSideBarOpen}
+              onOpenChatList={() => setIsSideBarOpen(true)}
             />
           );
         })()
