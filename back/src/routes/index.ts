@@ -27,6 +27,7 @@ import communityRoutes from './communityRoutes';
 import postRoutes from './postRoutes';
 import jobRoutes from './jobRoutes';
 import notificationRoutes from './notificationRoutes';
+import adminRoutes from './admin.routes';
 
 // إنشاء الـ Router
 const router = Router();
@@ -37,6 +38,7 @@ router.use('/groups', communityRoutes);
 router.use('/posts', postRoutes);
 router.use('/jobs', jobRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/admin', adminRoutes);
 
 // ==========================================
 // 🚀 المسارات (Routes)

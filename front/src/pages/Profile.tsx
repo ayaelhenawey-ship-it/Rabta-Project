@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAppSelector } from '../store/hooks';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useState } from 'react';
 
 const Profile: React.FC = () => {
@@ -80,6 +80,16 @@ const Profile: React.FC = () => {
                   <span className="material-icons-round text-sm">dashboard</span>
                   My Dashboard
                 </button>
+                
+                {user && user.role === 'admin' && (
+                  <Link 
+                    to="/admin"
+                    className="w-full border-2 border-[#7C3AED] text-[#7C3AED] dark:text-[#8B5CF6] dark:border-[#8B5CF6] hover:bg-[#7C3AED]/5 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-user-shield mr-2"></i>
+                    Admin Dashboard
+                  </Link>
+                )}
               </div>
             </div>
 

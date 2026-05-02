@@ -63,7 +63,7 @@ export const Settings = () => {
         <h1 className="text-2xl font-bold mb-8 px-2 text-[#171717] dark:text-[#F5F5F5]">Settings</h1>
 
         {/* Profile Card */}
-        <div className="flex items-center gap-4 p-4 mb-6 bg-white dark:bg-[#262626] rounded-2xl border border-gray-100 dark:border-white/5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-all group">
+        <div onClick={() => navigate('/profile')} className="flex items-center gap-4 p-4 mb-6 bg-white dark:bg-[#262626] rounded-2xl border border-gray-100 dark:border-white/5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-all group">
           <div className="relative">
             {user?.avatar ? (
               <img 
@@ -97,7 +97,7 @@ export const Settings = () => {
               Account
             </div>
             
-            <div className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/[0.02] cursor-pointer transition-colors border-b border-gray-50 dark:border-white/5">
+            <div onClick={() => navigate('/edit-profile')} className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/[0.02] cursor-pointer transition-colors border-b border-gray-50 dark:border-white/5">
               <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
                 <span className="material-icons-round">person</span>
               </div>
@@ -105,6 +105,7 @@ export const Settings = () => {
                 <h4 className="text-sm font-semibold text-[#171717] dark:text-[#F5F5F5]">Profile & Identity</h4>
                 <p className="text-xs text-gray-400">Name, Bio, ITI Track</p>
               </div>
+              <span className="text-gray-400"><span className="material-icons-round">chevron_right</span></span>
             </div>
 
             <div 

@@ -43,6 +43,14 @@ import FreelancerProfile from "./pages/employer/FreelancerProfile";
 import AppliedProjects from "./pages/freelancer/AppliedProjects";
 import FreelancerDashboard from "./pages/freelancer/FreelancerDashboard";
 
+// Admin Dashboard
+import { AdminRoute } from "./components/layout/AdminRoute";
+import { AdminLayout } from "./components/layout/AdminLayout";
+import { AdminOverview } from "./pages/admin/AdminOverview";
+import { AdminUsers } from "./pages/admin/AdminUsers";
+import { AdminJobs } from "./pages/admin/AdminJobs";
+import { AdminGroups } from "./pages/admin/AdminGroups";
+
 function App() {
   const user = useSelector((state: RootState) => state.auth.user);
 
@@ -97,6 +105,17 @@ function App() {
           <Route path="/freelancer-profile/:id" element={<FreelancerProfile />} />
           <Route path="/applied-projects" element={<AppliedProjects />} />
           <Route path="/freelancer-dashboard" element={<FreelancerDashboard />} />
+        </Route>
+      </Route>
+
+      {/* 🛡️ Admin Dashboard (Isolated) */}
+      <Route element={<AdminRoute />}>
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="overview" element={<AdminOverview />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="jobs" element={<AdminJobs />} />
+          <Route path="groups" element={<AdminGroups />} />
         </Route>
       </Route>
 

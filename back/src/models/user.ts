@@ -8,9 +8,10 @@ export interface IUser extends Document {
   password?: string;
   phoneNumber?: string;
   googleId?: string;
-  role: 'freelancer' | 'employer';
+  role: 'freelancer' | 'employer' | 'admin';
   profileComplete: boolean;
   isVerified: boolean;
+  isBanned?: boolean;
   // Common fields
   jobTitle?: string;
   bioHeadline?: string;
@@ -100,9 +101,13 @@ const UserSchema: Schema = new Schema({
   },
   role: {
     type: String,
-    enum: ['freelancer', 'employer'],
+    enum: ['freelancer', 'employer', 'admin'],
     default: 'freelancer',
     required: [true, 'User role is required']
+  },
+  isBanned: {
+    type: Boolean,
+    default: false
   },
   profileComplete: {
     type: Boolean,

@@ -27,6 +27,11 @@ export const loginUser = async (email: string, password: string) => {
 };
 
 export const registerUser = async (userData: any) => {
+  // Registration Shield: Prevent malicious role injection
+  if (userData.role === 'admin' || !['freelancer', 'employer'].includes(userData.role)) {
+    userData.role = 'freelancer'; // Default safe fallback
+  }
+
   const existingUser = await User.findOne({ email: userData.email });
   if (existingUser) throw new AppError('This email is already registered. Please log in.', 400);
   
